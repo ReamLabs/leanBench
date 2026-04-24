@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>lean-bench run</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div class="container">
+      <a class="back-link" href="index.html">← all runs</a>
+      <h1 id="run-title">loading…</h1>
+      <p class="tagline" id="run-subtitle"></p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="specs">
+      <h2>Machine specs</h2>
+      <dl id="spec-grid"></dl>
+    </section>
+
+    <section id="provenance">
+      <h2>Toolchain &amp; provenance</h2>
+      <dl id="prov-grid"></dl>
+    </section>
+
+    <section id="workloads">
+      <h2>Workloads</h2>
+      <div id="workload-list"></div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <a href="index.html">index</a> ·
+      <a id="raw-link" href="#">raw JSON</a>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
