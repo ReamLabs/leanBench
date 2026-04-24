@@ -1,0 +1,223 @@
+"""lean-bench orchestrator.
+
+Usage:
+    python runner/bench.py --label my-laptop
+
+Runs each workload in a separate subprocess of the Rust runner binary,
+samples CPU/memory during the run, then writes one JSON file per run under
+`results/<timestamp>__<fingerprint>.json`.
+
+The output is committed as-is (no post-processing, no index rebuild — that
+happens at deploy time in GH Actions).
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import math
+import subprocess
+import sys
+from pathlib import Path
+
+from runner import sysinfo
+from runner.sampler import ResourceSampler
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+
+SCHEMA_VERSION = 1
+
+# (cli-subcommand, workload-name, include-in-default-set)
+ALL_WORKLOADS: list[tuple[str, str, bool]] = [
+    ("leansig-keygen",     "leansig.keygen",           False),
+    ("leansig-sign",       "leansig.sign",             True),
+    ("leansig-verify",     "leansig.verify",           True),
+    ("xmss-keygen",        "xmss.keygen",              False),
+    ("xmss-sign",          "xmss.sign",                True),
+    ("xmss-verify",        "xmss.verify",              True),
+    ("aggregate-flat",     "aggregate.flat_1000_r2",   True),
+    ("aggregate-tree",     "aggregate.tree_2x500_r2",  True),
+]
+
+
+def parse_args():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--label", default=None,
+                    help="Human-readable nickname for this machine. "
+                         "Defaults to hostname (or CPU-slug if hostname is generic).")
+    ap.add_argument("--out-dir", type=Path, default=ROOT / "results")
+    ap.add_argument("--samples", type=int, default=30,
+                    help="Timed samples per workload (warm-up excluded)")
+    ap.add_argument("--warmup", type=int, default=3)
+    ap.add_argument("--include-keygen", action="store_true",
+                    help="Also run leansig.keygen and xmss.keygen (slow)")
+    ap.add_argument("--only", action="append", default=None,
+                    help="Run only these workload names; repeatable. Implies --include-keygen "
+                         "semantics if you list them explicitly.")
+    ap.add_argument("--notes", default="",
+                    help="Free-form note attached to the run record")
+    ap.add_argument("--release", action="store_true", default=True,
+                    help="Build the runner in release mode (default on)")
+    return ap.parse_args()
+
+
+def select_workloads(args) -> list[tuple[str, str]]:
+    if args.only:
+        requested = set(args.only)
+        selected = [(cmd, name) for (cmd, name, _) in ALL_WORKLOADS if name in requested]
+        missing = requested - {name for (_, name) in selected}
+        if missing:
+            sys.exit(f"unknown workload(s): {', '.join(sorted(missing))}")
+        return selected
+    return [
+        (cmd, name)
+        for (cmd, name, default) in ALL_WORKLOADS
+        if default or args.include_keygen
+    ]
+
+
+RUST_DIR = ROOT / "runner-rust"
+
+
+def build_runner() -> Path:
+    print("Building lean-bench-runner (release)...", flush=True)
+    r = subprocess.run(
+        ["cargo", "build", "--release", "--bin", "lean-bench-runner",
+         "--manifest-path", str(RUST_DIR / "Cargo.toml")],
+        cwd=ROOT,
+    )
+    if r.returncode != 0:
+        sys.exit("cargo build failed")
+    return RUST_DIR / "target" / "release" / "lean-bench-runner"
+
+
+def run_workload(binary: Path, subcmd: str, samples: int, warmup: int) -> dict:
+    """Run one workload subprocess, sample resources, return merged record."""
+    proc = subprocess.Popen(
+        [str(binary), subcmd,
+         "--samples", str(samples),
+         "--warmup", str(warmup)],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    # Delay sampler start slightly so we don't include the transient of
+    # process startup. Rust binary loads dep crates, initializes etc.
+    sampler = ResourceSampler(proc.pid, interval_ms=100)
+    stdout_b, stderr_b = proc.communicate()
+    resources = sampler.stop()
+
+    if proc.returncode != 0:
+        print(f"[error] {subcmd} exited {proc.returncode}")
+        print(stderr_b.decode(errors="replace"), file=sys.stderr)
+        return {}
+
+    stdout = stdout_b.decode(errors="replace").strip()
+    # Take the last line — stray cargo / tracing output may appear above.
+    last_line = stdout.splitlines()[-1] if stdout else ""
+    try:
+        rec = json.loads(last_line)
+    except json.JSONDecodeError as e:
+        print(f"[error] {subcmd}: could not parse runner JSON: {e}\nstdout: {stdout!r}",
+              file=sys.stderr)
+        return {}
+
+    samples_ns = rec.get("samples_ns", [])
+    summary = _summarize(samples_ns)
+
+    return {
+        "name": rec["workload"],
+        "unit": rec.get("unit", "ns"),
+        "samples_ns": samples_ns,              # keep raw samples for charts
+        "timing": summary,
+        "resources": resources,
+        "meta": {k: v for k, v in rec.items()
+                 if k not in {"workload", "unit", "samples_ns", "warmup",
+                              "leansig_sha", "leanmultisig_sha"}},
+    }
+
+
+def _summarize(samples: list[int]) -> dict:
+    if not samples:
+        return {}
+    s = sorted(samples)
+    n = len(s)
+    mean = sum(s) / n
+    var = sum((x - mean) ** 2 for x in s) / max(n - 1, 1)
+    return {
+        "n": n,
+        "mean_ns": int(mean),
+        "stddev_ns": int(math.sqrt(var)),
+        "min_ns": int(s[0]),
+        "p50_ns": int(s[n // 2]),
+        "p95_ns": int(s[max(0, int(n * 0.95) - 1)]),
+        "max_ns": int(s[-1]),
+    }
+
+
+def read_provenance(binary: Path) -> dict:
+    r = subprocess.run([str(binary), "provenance"], capture_output=True, text=True)
+    if r.returncode != 0:
+        return {"leansig_sha": "unknown", "leanmultisig_sha": "unknown"}
+    return json.loads(r.stdout)
+
+
+def main():
+    args = parse_args()
+    binary = build_runner()
+    provenance = read_provenance(binary)
+
+    machine = sysinfo.capture()
+    label = args.label or sysinfo.auto_label()
+    machine["label"] = label
+
+    if args.label is None:
+        print(f"Label (auto): {label}  (override with --label)")
+    print(f"Machine: {machine['cpu_model']} ({machine['fingerprint']})")
+    print(f"         {machine['physical_cores']} physical / "
+          f"{machine['logical_cores']} logical cores, {machine['memory_gb']} GB RAM")
+    print(f"         {machine['os']}")
+    print()
+
+    workloads_to_run = select_workloads(args)
+    print(f"Running {len(workloads_to_run)} workload(s): "
+          f"{', '.join(name for _, name in workloads_to_run)}")
+    print()
+
+    workload_results = []
+    for subcmd, name in workloads_to_run:
+        print(f"  → {name} ...", end="", flush=True)
+        rec = run_workload(binary, subcmd, args.samples, args.warmup)
+        if rec:
+            mean_ms = rec["timing"]["mean_ns"] / 1e6
+            print(f" {mean_ms:.2f} ms (n={rec['timing']['n']})")
+            workload_results.append(rec)
+        else:
+            print(" FAILED")
+
+    timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+    run_id = f"{timestamp}__{machine['fingerprint']}"
+
+    record = {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": run_id,
+        "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "machine": machine,
+        "toolchain": {**sysinfo.toolchain(), "git_shas": provenance},
+        "workloads": workload_results,
+        "notes": args.notes,
+    }
+
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = args.out_dir / f"{run_id}.json"
+    out_path.write_text(json.dumps(record, indent=2) + "\n")
+    print()
+    print(f"Wrote {out_path}")
+    print(f"git add {out_path.relative_to(ROOT)} && git commit -m 'benchmark: {label}'")
+
+
+if __name__ == "__main__":
+    main()
