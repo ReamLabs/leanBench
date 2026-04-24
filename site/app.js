@@ -34,6 +34,23 @@ const fmtDate = (iso) => {
   } catch { return iso; }
 };
 
+// Compact, glanceable relative time for the "last updated" stat — avoids
+// wrapping 20+ characters of ISO timestamp into the big stat cell.
+const fmtRelative = (iso) => {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    const diffS = (d.getTime() - Date.now()) / 1000;
+    const abs = Math.abs(diffS);
+    const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+    if (abs < 60) return rtf.format(Math.round(diffS), "second");
+    if (abs < 3600) return rtf.format(Math.round(diffS / 60), "minute");
+    if (abs < 86400) return rtf.format(Math.round(diffS / 3600), "hour");
+    if (abs < 86400 * 30) return rtf.format(Math.round(diffS / 86400), "day");
+    return d.toISOString().slice(0, 10);
+  } catch { return iso; }
+};
+
 const el = (tag, attrs = {}, ...children) => {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -76,10 +93,15 @@ const chartTheme = () => {
 
 // ---------- INDEX page ------------------------------------------------------
 
+// Active (leansig, leanmultisig) SHA pair. Runs from other combos are hidden
+// from the stats row, compare charts, and machine cards. Defaults to the
+// most-recent combo (sorted server-side).
+let indexData = null;
+let activeCombo = null;
+
 async function renderIndex() {
-  let index;
   try {
-    index = await fetch("results/index.json").then((r) => r.json());
+    indexData = await fetch("results/index.json").then((r) => r.json());
   } catch (e) {
     document.querySelector("#machines").innerHTML =
       `<p>No results yet. Run <code>uv run bench</code>, commit, push, and the
@@ -87,21 +109,106 @@ async function renderIndex() {
     return;
   }
 
-  const machines = index.machines || [];
-  document.querySelector("#stat-runs").textContent = index.run_count ?? 0;
+  const combos = indexData.combos || [];
+  activeCombo = combos[0] || null;
+  renderComboFilter(combos);
+  rerenderIndexForCombo();
+}
+
+function sameCombo(a, b) {
+  return a && b
+    && a.leansig_sha === b.leansig_sha
+    && a.leanmultisig_sha === b.leanmultisig_sha;
+}
+
+function runMatchesCombo(run, combo) {
+  if (!combo) return true;
+  const s = run.git_shas || {};
+  return s.leansig_sha === combo.leansig_sha
+      && s.leanmultisig_sha === combo.leanmultisig_sha;
+}
+
+function filteredMachines(machines, combo) {
+  return machines
+    .map((m) => ({ ...m, runs: (m.runs || []).filter((r) => runMatchesCombo(r, combo)) }))
+    .filter((m) => m.runs.length > 0);
+}
+
+function renderComboFilter(combos) {
+  const details = document.querySelector("#combo-filter");
+  const label   = details.querySelector(".combo-label");
+  const menu    = document.querySelector("#combo-menu");
+
+  // Click outside to close.
+  document.addEventListener("click", (e) => {
+    if (details.open && !details.contains(e.target)) details.open = false;
+  });
+
+  if (!combos.length) {
+    label.textContent = "no runs yet";
+    details.open = false;
+    details.style.pointerEvents = "none";
+    return;
+  }
+
+  const updateLabel = () => {
+    label.textContent = comboShortLabel(activeCombo);
+    details.title = `leansig ${activeCombo.leansig_sha} · leanmultisig ${activeCombo.leanmultisig_sha}`;
+  };
+  updateLabel();
+
+  menu.innerHTML = "";
+  for (const c of combos) {
+    const active = sameCombo(c, activeCombo);
+    const opt = el("div", { class: `combo-option${active ? " active" : ""}`, title:
+      `leansig ${c.leansig_sha}\nleanmultisig ${c.leanmultisig_sha}` },
+      el("div", { class: "combo-option-shas",
+        text: `leansig ${shortSha(c.leansig_sha)} · leanmultisig ${shortSha(c.leanmultisig_sha)}` }),
+      el("div", { class: "combo-option-meta",
+        text: `${fmtRelative(c.latest_run_ts)} · ${c.run_count} run${c.run_count === 1 ? "" : "s"}` }),
+    );
+    opt.addEventListener("click", () => {
+      activeCombo = c;
+      details.open = false;
+      updateLabel();
+      for (const o of menu.querySelectorAll(".combo-option")) o.classList.remove("active");
+      opt.classList.add("active");
+      rerenderIndexForCombo();
+    });
+    menu.appendChild(opt);
+  }
+}
+
+function comboShortLabel(c) {
+  if (!c) return "no combo";
+  return `leansig ${shortSha(c.leansig_sha)} · leanmultisig ${shortSha(c.leanmultisig_sha)}  —  ${fmtRelative(c.latest_run_ts)}`;
+}
+
+function shortSha(s) { return s && s.length >= 8 ? s.slice(0, 8) : (s || "—"); }
+
+function rerenderIndexForCombo() {
+  const machines = filteredMachines(indexData.machines || [], activeCombo);
+  const runCount = machines.reduce((n, m) => n + m.runs.length, 0);
+
+  document.querySelector("#stat-runs").textContent = runCount;
   document.querySelector("#stat-machines").textContent = machines.length;
-  document.querySelector("#stat-generated").textContent = fmtDate(index.generated_at);
+  const latest = activeCombo ? activeCombo.latest_run_ts : indexData.generated_at;
+  document.querySelector("#stat-generated").textContent = fmtDate(latest);
 
   const allWorkloads = new Set();
-  for (const m of machines) {
-    for (const r of m.runs || []) {
-      for (const w of r.workloads || []) allWorkloads.add(w.name);
-    }
-  }
-  renderCompare(document.querySelector("#compare-grid"), [...allWorkloads], machines);
+  for (const m of machines) for (const r of m.runs) for (const w of r.workloads || []) allWorkloads.add(w.name);
+
+  const compare = document.querySelector("#compare-grid");
+  compare.innerHTML = "";
+  renderCompare(compare, [...allWorkloads], machines);
 
   const list = document.querySelector("#machine-list");
-  for (const m of machines) list.appendChild(renderMachineCard(m));
+  list.innerHTML = "";
+  if (!machines.length) {
+    list.appendChild(el("p", { text: "No runs match this version combo." }));
+  } else {
+    for (const m of machines) list.appendChild(renderMachineCard(m));
+  }
 }
 
 // One chart per workload, grouped by category prefix (leansig / xmss / aggregate).
@@ -301,6 +408,7 @@ function renderWorkload(w, idx) {
       el("div", { class: "workload-stat-value", text: String(value) }),
     ));
   }
+  // Resources (CPU / RSS)
   const res = w.resources || {};
   if (res.cpu_percent) {
     stats.appendChild(el("div", { class: "workload-stat" },
