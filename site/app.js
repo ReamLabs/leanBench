@@ -366,16 +366,32 @@ async function renderRun() {
   const prov = document.querySelector("#prov-grid");
   prov.className = "grid";
   const t = rec.toolchain || {};
-  for (const [k, v] of [
-    ["rustc", t.rustc],
-    ["leanSig SHA", t.git_shas?.leansig_sha],
-    ["leanMultisig SHA", t.git_shas?.leanmultisig_sha],
-    ["Run ID", rec.run_id],
-    ["Notes", rec.notes],
-  ]) {
+  // GitHub `tree/<sha>` shows the working dir at that commit — better than
+  // `commit/<sha>` which shows just the diff. Both SHAs are pinned to the
+  // upstream leanEthereum repos via runner-rust/Cargo.toml.
+  const treeBase = (repo) => `https://github.com/leanEthereum/${repo}/tree/`;
+  const provEntries = [
+    ["rustc",            t.rustc, null],
+    ["leanSig SHA",      t.git_shas?.leansig_sha,      treeBase("leanSig")],
+    ["leanMultisig SHA", t.git_shas?.leanmultisig_sha, treeBase("leanMultisig")],
+    ["Run ID",           rec.run_id, null],
+    ["Notes",            rec.notes, null],
+  ];
+  for (const [k, v, urlBase] of provEntries) {
     if (!v) continue;
     prov.appendChild(el("dt", { text: k }));
-    prov.appendChild(el("dd", { text: String(v) }));
+    if (urlBase && /^[0-9a-f]{7,40}$/i.test(String(v))) {
+      const dd = el("dd");
+      dd.appendChild(el("a", {
+        href: urlBase + v,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        text: String(v),
+      }));
+      prov.appendChild(dd);
+    } else {
+      prov.appendChild(el("dd", { text: String(v) }));
+    }
   }
 
   const list = document.querySelector("#workload-list");
