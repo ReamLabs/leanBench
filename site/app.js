@@ -257,9 +257,10 @@ function buildCompareCard(workloadName, machines) {
   wrap.appendChild(canvas);
   card.appendChild(wrap);
 
-  const labels = [];
-  const values = [];
-  const colors = [];
+  // Build per-machine entries first, THEN sort by speed (fastest first).
+  // Color is bound to the machine's original list index so the same machine
+  // keeps the same color across charts — only the ordering changes per chart.
+  const entries = [];
   for (const [i, m] of machines.entries()) {
     let best = null;
     for (const r of m.runs || []) {
@@ -267,11 +268,13 @@ function buildCompareCard(workloadName, machines) {
       if (w && w.mean_ns != null && (best == null || w.mean_ns < best)) best = w.mean_ns;
     }
     if (best != null) {
-      labels.push(m.label);
-      values.push(best / 1e6);
-      colors.push(colorFor(i));
+      entries.push({ label: m.label, value: best / 1e6, color: colorFor(i) });
     }
   }
+  entries.sort((a, b) => a.value - b.value);
+  const labels = entries.map((e) => e.label);
+  const values = entries.map((e) => e.value);
+  const colors = entries.map((e) => e.color);
 
   queueMicrotask(() => {
     new Chart(canvas.getContext("2d"), {
