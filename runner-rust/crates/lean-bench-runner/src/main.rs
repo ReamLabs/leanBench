@@ -41,8 +41,10 @@ enum Cli {
     #[command(about = "XMSS verify")]
     XmssVerify(CommonArgs),
 
+    #[command(about = "Aggregation: flat 500-sig leaf at LOG_INV_RATE_PROD=2")]
+    AggregateFlat500(CommonArgs),
     #[command(about = "Aggregation: flat 1000-sig leaf at LOG_INV_RATE_PROD=2")]
-    AggregateFlat(CommonArgs),
+    AggregateFlat1000(CommonArgs),
     #[command(about = "Aggregation: 2-to-1 recursion over two 500-sig leaves at r=2")]
     AggregateTree(CommonArgs),
 
@@ -84,8 +86,9 @@ fn main() -> Result<()> {
         Cli::XmssKeygen(a)    => workloads::xmss_wl::keygen(&a),
         Cli::XmssSign(a)      => workloads::xmss_wl::sign(&a),
         Cli::XmssVerify(a)    => workloads::xmss_wl::verify(&a),
-        Cli::AggregateFlat(a) => workloads::aggregate::flat_1000_r2(&a),
-        Cli::AggregateTree(a) => workloads::aggregate::tree_2x500_r2(&a),
+        Cli::AggregateFlat500(a)  => workloads::aggregate::flat_500_r2(&a),
+        Cli::AggregateFlat1000(a) => workloads::aggregate::flat_1000_r2(&a),
+        Cli::AggregateTree(a)     => workloads::aggregate::tree_2x500_r2(&a),
         Cli::Provenance => {
             let j = serde_json::json!({
                 "leansig_sha": LEANSIG_SHA,

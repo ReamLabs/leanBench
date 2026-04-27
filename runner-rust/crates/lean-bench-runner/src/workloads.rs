@@ -160,28 +160,30 @@ pub mod aggregate {
     use super::*;
     use ::rec_aggregation::{benchmark::run_aggregation_benchmark, AggregationTopology};
 
-    /// One leaf aggregator over 1000 raw XMSS signatures at LOG_INV_RATE_PROD=2.
-    pub fn flat_1000_r2(args: &CommonArgs) -> Result<Record> {
-        let topology = AggregationTopology { raw_xmss: 1000, children: vec![], log_inv_rate: 2 };
-
-        // Aggregation internally does heavy one-time setup (DFT twiddles,
-        // bytecode, signer cache). First call amortizes it, so we treat the
-        // warmup as "real" and count remaining samples.
+    /// One leaf aggregator over `n` raw XMSS signatures at LOG_INV_RATE_PROD=2.
+    /// Aggregation internally does heavy one-time setup (DFT twiddles, bytecode,
+    /// signer cache). First call amortises it, so the warmup iterations matter
+    /// — we count only post-warmup samples.
+    fn flat_n_r2(args: &CommonArgs, n: usize) -> Result<Record> {
+        let topology = AggregationTopology { raw_xmss: n, children: vec![], log_inv_rate: 2 };
         let mut samples = Vec::with_capacity(args.samples);
         for i in 0..(args.samples + args.warmup) {
             let t = std::time::Instant::now();
-            let _elapsed_secs = run_aggregation_benchmark(&topology, 0, false);
+            let _ = run_aggregation_benchmark(&topology, 0, false);
             if i >= args.warmup {
                 samples.push(t.elapsed().as_nanos());
             }
         }
         Ok(make_record(
-            "aggregate.flat_1000_r2",
+            &format!("aggregate.flat_{n}_r2"),
             samples,
             args.warmup,
-            serde_json::json!({ "raw_xmss": 1000, "log_inv_rate": 2, "topology": "flat" }),
+            serde_json::json!({ "raw_xmss": n, "log_inv_rate": 2, "topology": "flat" }),
         ))
     }
+
+    pub fn flat_500_r2(args: &CommonArgs) -> Result<Record> { flat_n_r2(args, 500) }
+    pub fn flat_1000_r2(args: &CommonArgs) -> Result<Record> { flat_n_r2(args, 1000) }
 
     /// 2-to-1 recursion: root combines two 500-sig leaves. Reports total
     /// wall time including both leaves + the recursion step, at r=2.
