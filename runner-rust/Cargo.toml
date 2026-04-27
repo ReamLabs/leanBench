@@ -22,10 +22,10 @@ postcard = { version = "1.1", features = ["alloc"] }
 # leanSig @ main as of 2026-04-23
 leansig = { git = "https://github.com/leanEthereum/leanSig.git", rev = "16c660e93c60240de113fdca6be7455d6d7721a1" }
 
-# leanMultisig @ main as of 2026-04-23
-xmss            = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "1ad5fe259b748a78195a8c67353989650ea3d410" }
-rec_aggregation = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "1ad5fe259b748a78195a8c67353989650ea3d410" }
-backend         = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "1ad5fe259b748a78195a8c67353989650ea3d410" }
+# leanMultisig @ main as of 2026-04-27
+xmss            = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "c09c85ab089f40ca081c3c07c3625490f39026c7" }
+rec_aggregation = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "c09c85ab089f40ca081c3c07c3625490f39026c7" }
+backend         = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "c09c85ab089f40ca081c3c07c3625490f39026c7" }
 
 [profile.release]
 lto = "thin"
