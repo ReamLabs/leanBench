@@ -9,10 +9,12 @@ dependencies = [
 
 [project.scripts]
 # `uv run bench --label ...`  /  `uv run index`  /  `uv run serve`
+# `uv run remote-bench --credentials ... --project ...`
 # Path-style invocation (`uv run runner/bench.py`) still works too.
-bench = "runner.bench:main"
-index = "scripts.build_index:main"
-serve = "scripts.dev_server:main"
+bench        = "runner.bench:main"
+index        = "scripts.build_index:main"
+serve        = "scripts.dev_server:main"
+remote-bench = "scripts.remote_bench:main"
 
 [build-system]
 requires = ["hatchling"]

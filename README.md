@@ -46,6 +46,95 @@ git push
 `uv run` resolves deps from `pyproject.toml` + `uv.lock` on first invocation
 and caches the venv under `.venv/`. No `pip install`, no activate step.
 
+### Running on a remote VM (GCP)
+
+Spin up a fresh VM, install everything, run the benchmark, pull the result
+JSON back locally, destroy the VM:
+
+```bash
+uv run remote-bench \
+    --credentials gcp-credentials.json \
+    --machine-type n2-standard-8 \
+    --image-family ubuntu-2404-lts-amd64
+```
+
+Ubuntu 24.04 ships as arch-suffixed image families on GCP — use
+`ubuntu-2404-lts-amd64` for x86_64 machine types (e.g. `n2-*`, `c3-*`,
+`c4-*`) and `ubuntu-2404-lts-arm64` for ARM (e.g. `t2a-*`, Axion).
+
+`--project` defaults to the `project_id` field in the credentials JSON;
+pass it explicitly only if you want to bench in a different project.
+
+The result lands in `./results/<timestamp>__<fingerprint>.json` ready for
+you to commit. The VM is destroyed in a `try/finally`, including on
+Ctrl-C; orphans are tagged `lean-bench=true` so they're easy to spot.
+
+#### One-time GCP setup (least-privilege)
+
+Don't use your personal `gcloud` session for this — create a dedicated
+service account with a custom role limited to exactly what the script
+needs.
+
+1. **Create a service account**:
+   ```bash
+   gcloud iam service-accounts create lean-bench \
+       --display-name="lean-bench remote runner" \
+       --project=$PROJECT
+   ```
+
+2. **Create a custom role with only these permissions**:
+   - `compute.instances.create`
+   - `compute.instances.delete`
+   - `compute.instances.get`
+   - `compute.instances.setMetadata`
+   - `compute.instances.setLabels`
+   - `compute.disks.create`
+   - `compute.subnetworks.use`
+   - `compute.subnetworks.useExternalIp`
+   - `compute.zones.get`
+   - `compute.projects.get`
+   - `iap.tunnelInstances.accessViaIAP`
+
+   ```bash
+   gcloud iam roles create leanBenchRunner --project=$PROJECT \
+       --title="lean-bench runner" \
+       --permissions=compute.instances.create,compute.instances.delete,compute.instances.get,compute.instances.setMetadata,compute.instances.setLabels,compute.disks.create,compute.subnetworks.use,compute.subnetworks.useExternalIp,compute.zones.get,compute.projects.get,iap.tunnelInstances.accessViaIAP
+   ```
+
+   To add a permission to an existing role:
+   ```bash
+   gcloud iam roles update leanBenchRunner --project=$PROJECT \
+       --add-permissions=<permission.name>
+   ```
+
+3. **Grant the role to the SA** (optionally with an IAM Condition scoping
+   to the `lean-bench=true` label so even a leaked key can only manage
+   VMs the script itself created):
+   ```bash
+   gcloud projects add-iam-policy-binding $PROJECT \
+       --member="serviceAccount:lean-bench@$PROJECT.iam.gserviceaccount.com" \
+       --role="projects/$PROJECT/roles/leanBenchRunner"
+   ```
+
+4. **Create a JSON key** and stash it locally (gitignored):
+   ```bash
+   gcloud iam service-accounts keys create gcp-credentials.json \
+       --iam-account="lean-bench@$PROJECT.iam.gserviceaccount.com"
+   ```
+
+5. **Enable required APIs once**:
+   ```bash
+   gcloud services enable compute.googleapis.com iap.googleapis.com --project=$PROJECT
+   ```
+
+The script activates the SA in a temp `CLOUDSDK_CONFIG` directory per
+invocation — your normal `gcloud` session is never touched, and no auth
+material persists after the script exits.
+
+For extra safety, run benchmarks in their own GCP project so a compromise
+stays contained, billing is isolated, and you can set a low budget alert
+specifically for benchmark VMs.
+
 ### Preview locally before pushing
 
 ```bash
