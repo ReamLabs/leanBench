@@ -291,7 +291,6 @@ def _print_summary(s: dict) -> None:
         print(f"  {w['name']:<32} {w['mean_ms']:>9.3f}ms {w['p95_ms']:>9.3f}ms  {w['n']}")
     print()
     print(f"  saved → {s['file']}")
-    print(f"  commit with:  git add {s['file']} && git commit -m 'benchmark: {s['label']}'")
 
 
 if __name__ == "__main__":

@@ -34,14 +34,12 @@ git clone <this-repo> lean-bench
 cd lean-bench
 
 # Run (default workloads, ~5-10 min on a modern machine).
-# --label is optional; defaults to this host's name, or a CPU-derived slug.
+# --label is optional; defaults to a CPU-derived slug.
 uv run bench
-
-# Commit & push — the site rebuilds on deploy
-git add results/
-git commit -m "benchmark"
-git push
 ```
+
+The result lands in `results/<timestamp>__<fingerprint>.json`. Commit and
+push it on your own schedule — the site rebuilds on every push to `main`.
 
 `uv run` resolves deps from `pyproject.toml` + `uv.lock` on first invocation
 and caches the venv under `.venv/`. No `pip install`, no activate step.

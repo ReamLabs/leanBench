@@ -216,7 +216,6 @@ def main():
     out_path.write_text(json.dumps(record, indent=2) + "\n")
     print()
     print(f"Wrote {out_path}")
-    print(f"git add {out_path.relative_to(ROOT)} && git commit -m 'benchmark: {label}'")
 
 
 if __name__ == "__main__":
