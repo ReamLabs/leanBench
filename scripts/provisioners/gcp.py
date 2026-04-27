@@ -95,15 +95,41 @@ class GCPProvisioner:
             time.sleep(5)
         raise RuntimeError(f"SSH not ready after {timeout_s}s: {last_err}")
 
-    def ssh_exec(self, inst: Instance, cmd: str) -> int:
-        # Stream stdout/stderr to caller's tty.
-        r = subprocess.run(
+    def ssh_exec(self, inst: Instance, cmd: str, prefix: str = "") -> int:
+        """Stream stdout/stderr to caller's tty. If `prefix` is given, every
+        line is prepended with it — useful when several runs interleave on
+        the same console (parallel mode)."""
+        if not prefix:
+            r = subprocess.run(
+                ["gcloud", "compute", "ssh", inst.name,
+                 "--zone", self.zone, "--tunnel-through-iap",
+                 "--command", cmd],
+                env=self._env(),
+            )
+            return r.returncode
+
+        # Per-line prefix path. Read stdout line-by-line and re-emit prefixed.
+        # stderr is folded into stdout so error lines stay grouped with
+        # whichever machine produced them.
+        import sys as _sys
+        proc = subprocess.Popen(
             ["gcloud", "compute", "ssh", inst.name,
              "--zone", self.zone, "--tunnel-through-iap",
              "--command", cmd],
             env=self._env(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
         )
-        return r.returncode
+        try:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                _sys.stdout.write(f"{prefix}{line}")
+                _sys.stdout.flush()
+        finally:
+            proc.wait()
+        return proc.returncode
 
     def ssh_capture(self, inst: Instance, cmd: str) -> str:
         r = self._gcloud(

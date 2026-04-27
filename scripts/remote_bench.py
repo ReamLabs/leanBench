@@ -8,10 +8,12 @@ require an actively crashed Python interpreter (in which case the orphan
 is tagged `lean-bench=true` for cleanup).
 
 Usage:
-    uv run remote-bench \\
-        --credentials gcp-credentials.json \\
-        --machine-type n2-standard-8 \\
-        --image-family ubuntu-2404-lts
+    # Run the default machine matrix (sequential, prompts y/N first):
+    uv run remote-bench --credentials gcp-credentials.json
+
+    # Or pin a single machine type:
+    uv run remote-bench --credentials gcp-credentials.json \\
+        --machine-type n2-standard-8
 
 `--project` defaults to the `project_id` field in the credentials JSON.
 """
@@ -27,8 +29,20 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scripts.provisioners import InstanceSpec
+from scripts.provisioners import Instance, InstanceSpec
 from scripts.provisioners.gcp import GCPProvisioner
+
+
+# Default machine matrix used when `--machine-type` is not given.
+# Anchored to EIP-7870, with a clean SIMD-generation A/B at 4 vCPU
+# (n1 vs c4-4 isolates AVX2 vs AVX-512) and a Rayon-scaling line on
+# Granite Rapids (c4-4 / c4-8 / c4-16, same uArch).
+DEFAULT_MACHINE_TYPES = [
+    "n1-standard-4",   # 2 physical cores, Skylake / AVX2 — older-gen AVX2 baseline
+    "c4-standard-4",   # 2 physical cores, Granite Rapids / AVX-512 — A/B partner for n1
+    "c4-standard-8",   # 4 physical cores, Granite Rapids / AVX-512 — Full Node tier
+    "c4-standard-16",  # 8 physical cores, Granite Rapids / AVX-512 — Attester tier
+]
 
 
 # Bash run on the VM after SSH is up. Idempotent; designed to survive a
@@ -87,7 +101,17 @@ def main():
                     help="GCP project ID. Defaults to the `project_id` field "
                          "in the credentials JSON.")
     ap.add_argument("--zone", default="us-central1-a")
-    ap.add_argument("--machine-type", default="n2-standard-8")
+    ap.add_argument("--machine-type", default=None,
+                    help="GCP machine type (e.g. n2-standard-8). If omitted, "
+                         "iterate sequentially through DEFAULT_MACHINE_TYPES "
+                         "(prompts y/N before starting).")
+    ap.add_argument("--yes", "-y", action="store_true",
+                    help="Skip the y/N prompt when running the default matrix.")
+    ap.add_argument("--parallel", action=argparse.BooleanOptionalAction, default=True,
+                    help="Run the matrix concurrently (one VM per machine, "
+                         "default) — output is line-prefixed by machine. "
+                         "Pass `--no-parallel` to run sequentially instead "
+                         "(slower wallclock, lower peak GCP concurrency).")
     ap.add_argument("--image-family", default="ubuntu-2404-lts-amd64",
                     help="GCP image family. Ubuntu 24.04 is published under "
                          "arch-suffixed families: `ubuntu-2404-lts-amd64` "
@@ -135,6 +159,19 @@ def main():
         if not args.project:
             sys.exit("--project not given and credentials JSON has no project_id field")
 
+    # ---- decide which machines to bench ---------------------------------
+    if args.machine_type:
+        machines = [args.machine_type]
+    else:
+        machines = list(DEFAULT_MACHINE_TYPES)
+        print("No --machine-type given. Default matrix:")
+        for m in machines:
+            print(f"  • {m}")
+        print()
+        if not args.yes and not _confirm("Bench all of these (sequentially)?"):
+            print("aborted.")
+            sys.exit(0)
+
     # ---- pick + initialise provisioner ----------------------------------
     if args.provider == "gcp":
         prov = GCPProvisioner(
@@ -145,59 +182,122 @@ def main():
     else:
         sys.exit(f"unknown provider: {args.provider}")
 
-    timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
-    vm_name = f"lean-bench-{timestamp}"
-    spec = InstanceSpec(
-        name=vm_name,
-        machine_type=args.machine_type,
-        image_family=args.image_family,
-        extras={"image_project": args.image_project},
-        # Stable label so orphan instances are easy to clean up.
-        labels={"lean-bench": "true", "lean-bench-ephemeral": "true"},
-    )
+    # Track all currently-live VMs so the signal handler can tear them down
+    # regardless of which threads are running. Keyed by machine_type.
+    import threading
+    live_lock = threading.Lock()
+    live_instances: dict[str, Instance] = {}
 
-    inst = None
-    summary: dict | None = None
-    try:
-        print(f"==> creating {vm_name}")
-        print(f"    {args.machine_type} · {args.image_family} · {args.zone}")
-        inst = prov.create(spec)
-
-        # Install signal handlers AFTER the VM exists — so Ctrl-C destroys it.
-        def cleanup_signal(sig, _frame):
-            print("\n==> caught signal; destroying instance...")
-            if inst is not None:
+    def cleanup_signal(_sig, _frame):
+        print("\n==> caught signal; destroying live instance(s)...")
+        with live_lock:
+            for mt, inst in list(live_instances.items()):
                 try:
                     prov.destroy(inst)
                 except Exception as e:  # noqa: BLE001
-                    print(f"    error destroying: {e}")
-            prov.close()
-            sys.exit(130)
+                    print(f"    error destroying {mt}: {e}")
+        prov.close()
+        sys.exit(130)
 
-        signal.signal(signal.SIGINT, cleanup_signal)
-        signal.signal(signal.SIGTERM, cleanup_signal)
+    signal.signal(signal.SIGINT, cleanup_signal)
+    signal.signal(signal.SIGTERM, cleanup_signal)
 
-        print(f"==> waiting for SSH (timeout {args.ssh_timeout_s}s)")
+    summaries: list[dict] = []
+    failures: list[tuple[str, str]] = []
+
+    def _run(machine_type: str) -> None:
+        # Prefix every remote line with the machine type when running in
+        # parallel — otherwise output from 4 boxes interleaves illegibly.
+        prefix = f"[{machine_type}] " if (args.parallel and len(machines) > 1) else ""
+        try:
+            summary = run_one_machine(
+                prov, args, machine_type, live_instances, live_lock, prefix=prefix,
+            )
+            if summary:
+                summaries.append(summary)
+        except Exception as e:  # noqa: BLE001
+            print(f"\nerror on {machine_type}: {e}", file=sys.stderr)
+            failures.append((machine_type, str(e)))
+
+    try:
+        if args.parallel and len(machines) > 1:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=len(machines)) as pool:
+                # Submit all and let the pool wait for completion on exit.
+                for fut in [pool.submit(_run, m) for m in machines]:
+                    fut.result()
+        else:
+            for machine_type in machines:
+                print()
+                _run(machine_type)
+    finally:
+        prov.close()
+
+    print()
+    for s in summaries:
+        _print_summary(s)
+    if failures:
+        print()
+        print("Failed machines:")
+        for m, err in failures:
+            print(f"  • {m}: {err}")
+        sys.exit(1)
+
+
+def run_one_machine(
+    prov,
+    args,
+    machine_type: str,
+    live_instances: dict,
+    live_lock,
+    prefix: str = "",
+) -> dict | None:
+    """Provision one VM, run the bench, scp the result back, destroy it.
+
+    `live_instances[machine_type]` tracks the live VM so the top-level
+    signal handler can destroy every concurrent run on Ctrl-C. `live_lock`
+    serialises mutation across threads in parallel mode.
+    """
+    # Make VM names unique even when several runs are spawned in the same
+    # second (parallel mode). Embed the machine type in the name too.
+    timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
+    short = machine_type.replace("standard-", "s").replace("highcpu-", "h")
+    vm_name = f"lean-bench-{short}-{timestamp}"
+    spec = InstanceSpec(
+        name=vm_name,
+        machine_type=machine_type,
+        image_family=args.image_family,
+        extras={"image_project": args.image_project},
+        labels={"lean-bench": "true", "lean-bench-ephemeral": "true"},
+    )
+
+    inst: Instance | None = None
+    summary: dict | None = None
+    try:
+        print(f"{prefix}==> creating {vm_name}")
+        print(f"{prefix}    {machine_type} · {args.image_family} · {args.zone}")
+        inst = prov.create(spec)
+        with live_lock:
+            live_instances[machine_type] = inst
+
+        print(f"{prefix}==> waiting for SSH (timeout {args.ssh_timeout_s}s)")
         prov.wait_ssh_ready(inst, timeout_s=args.ssh_timeout_s)
 
-        print("==> running setup + bench (live output below)")
-        print("─" * 64)
-        # Tag the result with the machine type so cross-run comparisons by
-        # label are meaningful (vs. the GCE-assigned hostname). User-supplied
-        # `--bench-args` can override since argparse takes the last `--label`.
-        bench_args = f"--label {args.machine_type} {args.bench_args}".strip()
+        print(f"{prefix}==> running setup + bench")
+        if not prefix:
+            print("─" * 64)
+        bench_args = f"--label {machine_type} {args.bench_args}".strip()
         cmd = SETUP_AND_RUN.format(
             repo_url=args.repo_url,
             branch=args.branch,
             bench_args=bench_args,
         )
-        rc = prov.ssh_exec(inst, cmd)
-        print("─" * 64)
+        rc = prov.ssh_exec(inst, cmd, prefix=prefix)
+        if not prefix:
+            print("─" * 64)
         if rc != 0:
             raise RuntimeError(f"benchmark exited with code {rc}")
 
-        # ---- discover the result file ----------------------------------
-        # Re-run the same `ls -t` so we don't rely on parsing streamed stdout.
         marker = prov.ssh_capture(
             inst,
             "cd lean-bench && ls -t results/*.json 2>/dev/null "
@@ -207,36 +307,44 @@ def main():
             raise RuntimeError("bench finished but no result JSON found on remote")
         remote_path = f"lean-bench/{marker}"
 
-        # ---- pull it back ---------------------------------------------
         args.out_dir.mkdir(parents=True, exist_ok=True)
         local_path = args.out_dir / Path(marker).name
-        print(f"==> pulling result back → {local_path}")
+        print(f"{prefix}==> pulling result back → {local_path}")
         prov.scp_back(inst, remote_path, local_path)
 
         summary = _summary(local_path)
 
-    except Exception as e:  # noqa: BLE001
-        print(f"\nerror: {e}", file=sys.stderr)
+    except Exception:
         if args.keep_on_failure and inst is not None:
             print(
-                f"\nVM {inst.name} retained for debugging. "
+                f"\n{prefix}VM {inst.name} retained for debugging. "
                 f"When done:\n  gcloud compute instances delete {inst.name} "
                 f"--zone={args.zone} --quiet",
                 file=sys.stderr,
             )
-            inst = None  # skip the destroy in finally
+            with live_lock:
+                live_instances.pop(machine_type, None)
+            inst = None  # skip destroy in finally
         raise
     finally:
         if inst is not None:
-            print(f"==> destroying {inst.name}")
+            print(f"{prefix}==> destroying {inst.name}")
             try:
                 prov.destroy(inst)
             except Exception as e:  # noqa: BLE001
-                print(f"    error destroying (cleanup manually!): {e}", file=sys.stderr)
-        prov.close()
+                print(f"{prefix}    error destroying (cleanup manually!): {e}", file=sys.stderr)
+            with live_lock:
+                live_instances.pop(machine_type, None)
 
-    if summary:
-        _print_summary(summary)
+    return summary
+
+
+def _confirm(prompt: str) -> bool:
+    try:
+        ans = input(f"{prompt} [y/N] ").strip().lower()
+    except EOFError:
+        return False
+    return ans in ("y", "yes")
 
 
 def _detect_repo_url() -> str | None:

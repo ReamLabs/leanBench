@@ -50,11 +50,27 @@ Spin up a fresh VM, install everything, run the benchmark, pull the result
 JSON back locally, destroy the VM:
 
 ```bash
+# Run the default machine matrix (asks y/N before kicking off):
+uv run remote-bench --credentials gcp-credentials.json
+
+# Or pin a single machine type:
 uv run remote-bench \
     --credentials gcp-credentials.json \
     --machine-type n2-standard-8 \
     --image-family ubuntu-2404-lts-amd64
 ```
+
+The default matrix is intentionally small and EIP-7870-anchored:
+
+  - `n1-standard-4` — Skylake / AVX2, older-gen baseline
+  - `c4-standard-4` — Granite Rapids / AVX-512, A/B partner for n1 (isolates SIMD gen)
+  - `c4-standard-8` — Granite Rapids / AVX-512, EIP-7870 Full Node tier
+  - `c4-standard-16` — Granite Rapids / AVX-512, EIP-7870 Attester tier
+
+Parallel by default (~30 min wall time, all four VMs running at once,
+output line-prefixed with machine type so streams stay readable). Pass
+`--no-parallel` for sequential runs (lower peak GCP concurrency, ~2 h
+total). Use `--yes` / `-y` to skip the prompt in unattended runs.
 
 Ubuntu 24.04 ships as arch-suffixed image families on GCP — use
 `ubuntu-2404-lts-amd64` for x86_64 machine types (e.g. `n2-*`, `c3-*`,
