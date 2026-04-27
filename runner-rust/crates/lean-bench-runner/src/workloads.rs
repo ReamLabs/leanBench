@@ -185,10 +185,11 @@ pub mod aggregate {
     pub fn flat_500_r2(args: &CommonArgs) -> Result<Record> { flat_n_r2(args, 500) }
     pub fn flat_1000_r2(args: &CommonArgs) -> Result<Record> { flat_n_r2(args, 1000) }
 
-    /// 2-to-1 recursion: root combines two 500-sig leaves. Reports total
-    /// wall time including both leaves + the recursion step, at r=2.
-    pub fn tree_2x500_r2(args: &CommonArgs) -> Result<Record> {
-        let leaf = AggregationTopology { raw_xmss: 500, children: vec![], log_inv_rate: 2 };
+    /// 2-to-1 recursion: root combines two `n`-sig leaves at LOG_INV_RATE_PROD=2.
+    /// Reports total wall time including both leaves + the recursion step.
+    /// Subtract `2 × aggregate.flat_<n>_r2` for the recursion-only cost.
+    fn tree_2xn_r2(args: &CommonArgs, n: usize) -> Result<Record> {
+        let leaf = AggregationTopology { raw_xmss: n, children: vec![], log_inv_rate: 2 };
         let topology = AggregationTopology {
             raw_xmss: 0,
             children: vec![leaf.clone(), leaf],
@@ -203,16 +204,19 @@ pub mod aggregate {
             }
         }
         Ok(make_record(
-            "aggregate.tree_2x500_r2",
+            &format!("aggregate.tree_2x{n}_r2"),
             samples,
             args.warmup,
             serde_json::json!({
-                "leaf_raw_xmss": 500,
+                "leaf_raw_xmss": n,
                 "fan_in": 2,
                 "log_inv_rate": 2,
                 "topology": "2-to-1 recursion",
-                "note": "total wall time includes both leaves; subtract 2 × aggregate.flat_500_r2 for recursion-only cost",
+                "note": format!("total wall time includes both leaves; subtract 2 × aggregate.flat_{n}_r2 for recursion-only cost"),
             }),
         ))
     }
+
+    pub fn tree_2x250_r2(args: &CommonArgs) -> Result<Record> { tree_2xn_r2(args, 250) }
+    pub fn tree_2x500_r2(args: &CommonArgs) -> Result<Record> { tree_2xn_r2(args, 500) }
 }

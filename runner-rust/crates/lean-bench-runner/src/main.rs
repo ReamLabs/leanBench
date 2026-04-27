@@ -41,12 +41,22 @@ enum Cli {
     #[command(about = "XMSS verify")]
     XmssVerify(CommonArgs),
 
-    #[command(about = "Aggregation: flat 500-sig leaf at LOG_INV_RATE_PROD=2")]
+    // clap derive's kebab-case converter doesn't insert a dash between a
+    // letter and a digit (`AggregateFlat500` → `aggregate-flat500`), so we
+    // override the CLI name explicitly to keep the dash-separated form that
+    // bench.py and humans expect.
+    #[command(name = "aggregate-flat-500",
+              about = "Aggregation: flat 500-sig leaf at LOG_INV_RATE_PROD=2")]
     AggregateFlat500(CommonArgs),
-    #[command(about = "Aggregation: flat 1000-sig leaf at LOG_INV_RATE_PROD=2")]
+    #[command(name = "aggregate-flat-1000",
+              about = "Aggregation: flat 1000-sig leaf at LOG_INV_RATE_PROD=2")]
     AggregateFlat1000(CommonArgs),
-    #[command(about = "Aggregation: 2-to-1 recursion over two 500-sig leaves at r=2")]
-    AggregateTree(CommonArgs),
+    #[command(name = "aggregate-tree-250",
+              about = "Aggregation: 2-to-1 recursion over two 250-sig leaves at r=2")]
+    AggregateTree250(CommonArgs),
+    #[command(name = "aggregate-tree-500",
+              about = "Aggregation: 2-to-1 recursion over two 500-sig leaves at r=2")]
+    AggregateTree500(CommonArgs),
 
     #[command(about = "Print version/provenance JSON and exit")]
     Provenance,
@@ -88,7 +98,8 @@ fn main() -> Result<()> {
         Cli::XmssVerify(a)    => workloads::xmss_wl::verify(&a),
         Cli::AggregateFlat500(a)  => workloads::aggregate::flat_500_r2(&a),
         Cli::AggregateFlat1000(a) => workloads::aggregate::flat_1000_r2(&a),
-        Cli::AggregateTree(a)     => workloads::aggregate::tree_2x500_r2(&a),
+        Cli::AggregateTree250(a)  => workloads::aggregate::tree_2x250_r2(&a),
+        Cli::AggregateTree500(a)  => workloads::aggregate::tree_2x500_r2(&a),
         Cli::Provenance => {
             let j = serde_json::json!({
                 "leansig_sha": LEANSIG_SHA,
