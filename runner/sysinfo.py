@@ -17,23 +17,38 @@ from typing import Any
 def auto_label() -> str:
     """Pick a sensible default --label for this host.
 
-    Hostname first (it's what humans already call the machine) — stripped of
-    mDNS/LAN suffixes. Falls back to a slug of the CPU model if the hostname
-    looks generic (cloud metadata-style `ip-…`, `ec2-…`, etc.).
-    """
-    host = (platform.node() or "").strip()
-    if host:
-        bare = host.split(".")[0]
-        generic = (
-            bare.startswith(("ip-", "ec2-", "host-"))
-            or bare in {"localhost", ""}
-        )
-        if not generic:
-            return bare
+    Prefers a CPU-model slug (e.g. `apple-m1-max`, `intel-xeon`) so labels
+    communicate hardware identity — matching the GCP-machine-type style
+    that `remote-bench` uses (`n2-standard-8`, `c3-standard-16`).
 
-    model = _cpu_info()["model"]
-    slug = re.sub(r"[^a-z0-9]+", "-", model.lower()).strip("-")
-    return slug or "unknown"
+    Hostname is a last-resort fallback. The previous default ("hostname
+    first") tagged Macs with their personal nickname (`Deep-Thought`),
+    which told you nothing about what hardware ran the bench.
+    """
+    slug = _cpu_slug(_cpu_info()["model"])
+    if slug:
+        return slug
+
+    host = (platform.node() or "").strip().split(".")[0]
+    if host and not host.startswith(("ip-", "ec2-", "host-")) and host != "localhost":
+        return host
+    return "unknown"
+
+
+def _cpu_slug(model: str) -> str:
+    """Compact, hyphenated identifier for a CPU model string.
+
+    "Apple M1 Max"                      -> "apple-m1-max"
+    "Intel(R) Xeon(R) CPU @ 2.80GHz"    -> "intel-xeon"
+    "AMD EPYC 7B12 64-Core Processor"   -> "amd-epyc-7b12"
+    """
+    s = model.lower()
+    s = re.sub(r"\((r|tm|c)\)", " ", s)        # trademark noise
+    s = re.sub(r"@.*$", "", s)                  # drop "@ 2.80GHz" suffix
+    s = re.sub(r"\b(cpu|processor|core|cores|ghz)\b", " ", s)
+    s = re.sub(r"\b\d+-core\b", " ", s)         # "64-core"
+    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    return s
 
 
 def capture() -> dict[str, Any]:
