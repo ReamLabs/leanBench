@@ -56,11 +56,18 @@ def build_index(results_dir: Path) -> dict:
         m.pop("_latest_ts", None)
         m["runs"].sort(key=lambda x: x["timestamp"], reverse=True)
 
+    # Sort machines by physical core count (ascending), then label
+    # (alphabetical). Smallest boxes appear first; same family stays
+    # grouped within a tier. Both the index page's bar charts and the
+    # machine-card list inherit this order.
+    def _sort_key(m: dict) -> tuple:
+        return (m.get("physical_cores") or 0, (m.get("label") or "").lower())
+
     return {
         "generated_at": _now(),
         "run_count": len(runs),
         "combos": _combos(runs),
-        "machines": sorted(machines.values(), key=lambda m: m["label"].lower()),
+        "machines": sorted(machines.values(), key=_sort_key),
     }
 
 
