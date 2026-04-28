@@ -362,7 +362,7 @@ function buildScalingCard(workloadName, c4Machines) {
         scales: {
           x: {
             type: "logarithmic",
-            title: { display: true, text: "physical cores (log2)" },
+            title: { display: true, text: "physical cores" },
             min: points[0].x,
             max: points[points.length - 1].x,
             ticks: {
