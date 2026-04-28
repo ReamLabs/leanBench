@@ -173,6 +173,14 @@ h2 {
   margin-top: 4px;
 }
 
+/* Section-level descriptive note (e.g. under a section heading) */
+.section-note {
+  color: var(--ink-soft);
+  font-size: 13px;
+  margin: 4px 0 14px;
+  max-width: 60ch;
+}
+
 /* Compare section — grid of per-workload charts, grouped by category */
 .compare-group { margin-bottom: 24px; }
 .compare-group:last-child { margin-bottom: 0; }

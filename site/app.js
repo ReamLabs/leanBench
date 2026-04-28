@@ -213,6 +213,10 @@ function rerenderIndexForCombo() {
   compare.innerHTML = "";
   renderCompare(compare, [...allWorkloads], machines);
 
+  const scaling = document.querySelector("#scaling-grid");
+  scaling.innerHTML = "";
+  renderScaling(scaling, [...allWorkloads], machines);
+
   const list = document.querySelector("#machine-list");
   list.innerHTML = "";
   if (!machines.length) {
@@ -263,6 +267,114 @@ function renderCompare(container, workloadNames, machines) {
     }
     container.appendChild(section);
   }
+}
+
+// Scaling section — for each workload, plot timing vs physical cores across
+// the c4-standard-* family. Same Granite Rapids core, only the count changes,
+// so the slope is a clean read on parallel scaling for that workload.
+function renderScaling(container, workloadNames, machines) {
+  const c4 = machines
+    .filter((m) => /^c4-standard-\d+$/.test(m.label || ""))
+    .filter((m) => m.physical_cores != null)
+    .sort((a, b) => a.physical_cores - b.physical_cores);
+
+  if (c4.length < 2) {
+    container.appendChild(el("p", { class: "section-note",
+      text: "Need at least 2 c4-standard-* machines for a scaling line; only " + c4.length + " in this combo." }));
+    return;
+  }
+
+  const grouped = {};
+  for (const name of workloadNames) {
+    const prefix = name.split(".")[0];
+    (grouped[prefix] = grouped[prefix] || []).push(name);
+  }
+  for (const v of Object.values(grouped)) v.sort();
+
+  const preferredOrder = ["leansig", "xmss", "aggregate"];
+  const keys = [
+    ...preferredOrder.filter((k) => grouped[k]),
+    ...Object.keys(grouped).filter((k) => !preferredOrder.includes(k)).sort(),
+  ];
+  const displayLabel = (g) => ({ xmss: "leanmultisig.xmss", aggregate: "leanmultisig" }[g] || g);
+
+  for (const group of keys) {
+    const section = el("div", { class: "compare-group" },
+      el("h3", { class: "compare-group-head", text: displayLabel(group) }),
+    );
+    const grid = el("div", { class: "compare-group-grid" });
+    for (const wl of grouped[group]) {
+      const card = buildScalingCard(wl, c4);
+      if (card) grid.appendChild(card);
+    }
+    section.appendChild(grid);
+    container.appendChild(section);
+  }
+}
+
+function buildScalingCard(workloadName, c4Machines) {
+  const points = [];
+  for (const m of c4Machines) {
+    let best = null;
+    for (const r of m.runs || []) {
+      const w = (r.workloads || []).find((x) => x.name === workloadName);
+      if (w && w.mean_ns != null && (best == null || w.mean_ns < best)) best = w.mean_ns;
+    }
+    if (best != null) points.push({ x: m.physical_cores, y: best / 1e6 });
+  }
+  if (points.length < 2) return null;
+
+  const card = el("div", { class: "compare-card" });
+  card.appendChild(el("h3", { text: workloadName }));
+  const wrap = el("div", { class: "compare-card-chart" });
+  const canvas = el("canvas");
+  wrap.appendChild(canvas);
+  card.appendChild(wrap);
+
+  // log2 spacing for cores (2,4,8,16 land on integer ticks); keep
+  // ms axis linear so the eye reads timing differences directly.
+  queueMicrotask(() => {
+    new Chart(canvas.getContext("2d"), {
+      type: "line",
+      data: {
+        datasets: [{
+          data: points,
+          borderColor: "#4a46d9",
+          backgroundColor: "#4a46d922",
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.15,
+          fill: false,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: (items) => `${items[0].parsed.x} physical cores`,
+              label: (ctx) => `${ctx.parsed.y.toFixed(3)} ms`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            type: "logarithmic",
+            title: { display: true, text: "physical cores (log2)" },
+            min: points[0].x,
+            max: points[points.length - 1].x,
+            ticks: {
+              callback: (v) => Number.isInteger(Math.log2(v)) ? v : null,
+            },
+          },
+          y: { title: { display: true, text: "ms (mean)" }, beginAtZero: true },
+        },
+      },
+    });
+  });
+  return card;
 }
 
 function buildCompareCard(workloadName, machines) {
