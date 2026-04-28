@@ -264,9 +264,91 @@ function renderCompare(container, workloadNames, machines) {
       section.appendChild(el("p", { class: "compare-group-note" },
         "Note: aggregate.tree timing = 2 × leaf + recursion. Recursion-only cost ≈ total − 2 × flat.",
       ));
+      const treeWorkloads = grouped[group].filter((n) => /\.tree_\d+x\d+_r2$/.test(n));
+      if (treeWorkloads.length) {
+        section.appendChild(el("h4", { class: "compare-subgroup-head",
+          text: "recursion-only (derived)" }));
+        const recurGrid = el("div", { class: "compare-group-grid" });
+        for (const wl of treeWorkloads) {
+          const card = buildRecursionCard(wl, machines);
+          if (card) recurGrid.appendChild(card);
+        }
+        section.appendChild(recurGrid);
+      }
     }
     container.appendChild(section);
   }
+}
+
+// "aggregate.tree_NxM_r2" → derived recursion-only chart: mean tree timing
+// minus N × the matching flat_M_r2 mean. Skipped per-machine if either input
+// is missing; whole card is skipped if no machine has both.
+function buildRecursionCard(treeName, machines) {
+  const m = treeName.match(/^aggregate\.tree_(\d+)x(\d+)_r2$/);
+  if (!m) return null;
+  const fanIn = parseInt(m[1], 10);
+  const leafSize = parseInt(m[2], 10);
+  const flatName = `aggregate.flat_${leafSize}_r2`;
+
+  const bestMean = (machine, name) => {
+    let best = null;
+    for (const r of machine.runs || []) {
+      const w = (r.workloads || []).find((x) => x.name === name);
+      if (w && w.mean_ns != null && (best == null || w.mean_ns < best)) best = w.mean_ns;
+    }
+    return best;
+  };
+
+  const entries = [];
+  for (const [i, mach] of machines.entries()) {
+    const tree = bestMean(mach, treeName);
+    const flat = bestMean(mach, flatName);
+    if (tree == null || flat == null) continue;
+    const recursionNs = tree - fanIn * flat;
+    if (recursionNs <= 0) continue; // negative means the inputs are inconsistent — skip
+    entries.push({ label: mach.label, value: recursionNs / 1e6, color: colorFor(i) });
+  }
+  if (entries.length < 2) return null;
+  entries.sort((a, b) => a.value - b.value);
+
+  const card = el("div", { class: "compare-card" });
+  card.appendChild(el("h3", {
+    text: `tree_${fanIn}x${leafSize} recursion = total − ${fanIn} × flat_${leafSize}`,
+  }));
+  const wrap = el("div", { class: "compare-card-chart" });
+  const canvas = el("canvas");
+  wrap.appendChild(canvas);
+  card.appendChild(wrap);
+
+  const labels = entries.map((e) => e.label);
+  const values = entries.map((e) => e.value);
+  const colors = entries.map((e) => e.color);
+  const xMax = niceCeil(Math.max(...values));
+
+  queueMicrotask(() => {
+    new Chart(canvas.getContext("2d"), {
+      type: "bar",
+      data: { labels, datasets: [{ data: values, backgroundColor: colors, borderRadius: 4 }] },
+      options: {
+        indexAxis: "y",
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${ctx.parsed.x.toFixed(3)} ms (recursion only)`,
+            },
+          },
+        },
+        scales: {
+          x: { title: { display: true, text: "ms" }, beginAtZero: true, max: xMax },
+          y: { ticks: { font: { family: getComputedStyle(document.body).getPropertyValue("--mono") } } },
+        },
+      },
+    });
+  });
+  return card;
 }
 
 // Scaling section — for each workload, plot timing vs physical cores across

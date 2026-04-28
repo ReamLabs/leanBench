@@ -199,6 +199,15 @@ h2 {
   color: var(--ink-soft);
   font-family: var(--mono);
 }
+.compare-subgroup-head {
+  margin: 20px 0 10px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 600;
+  font-family: var(--mono);
+}
 .compare-group-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
