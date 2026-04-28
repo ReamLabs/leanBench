@@ -22,7 +22,10 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import glob
 import json
+import os
+import re
 import shutil
 import signal
 import subprocess
@@ -83,6 +86,13 @@ git fetch origin {branch} --quiet
 git checkout --quiet {branch}
 git reset --hard --quiet origin/{branch}
 
+# leanMultisig generates ~10k XMSS test signatures lazily on first bench
+# invocation (~few minutes on slow VMs). When SIGNERS_CACHE_DIR points at
+# a directory holding a content-addressed cache file pre-uploaded by the
+# orchestrator, the lazy-init loads from disk in milliseconds instead.
+mkdir -p "$HOME/leanBench-signers"
+export SIGNERS_CACHE_DIR="$HOME/leanBench-signers"
+
 echo '==> [remote] running benchmark...'
 uv run bench {bench_args}
 
@@ -131,6 +141,12 @@ def main():
                     help="Don't destroy the VM if the bench fails — useful for debugging")
     ap.add_argument("--out-dir", type=Path, default=Path("results"))
     ap.add_argument("--ssh-timeout-s", type=int, default=300)
+    ap.add_argument("--signers-cache", type=Path, default=None,
+                    help="Path to a local benchmark_signers_cache_<hash>.bin file to "
+                         "pre-upload to each VM. Skips the ~few-minute lazy regen on "
+                         "first bench. If omitted, auto-discovered from "
+                         "~/.cargo/git/checkouts/leanmultisig-*/<sha>*/target/signers-cache/. "
+                         "Pass --signers-cache '' to disable upload.")
     args = ap.parse_args()
 
     if not args.credentials.is_file():
@@ -149,6 +165,22 @@ def main():
         args.repo_url = _detect_repo_url()
         if not args.repo_url:
             sys.exit("could not auto-detect --repo-url; pass it explicitly")
+
+    # Resolve the signers-cache: explicit empty string disables upload; None
+    # triggers auto-discovery; explicit path is taken as-is. Resolution is
+    # logged once here so per-VM noise stays minimal.
+    if args.signers_cache is None:
+        args.signers_cache = _discover_signers_cache()
+        if args.signers_cache:
+            size_mb = args.signers_cache.stat().st_size / (1024 * 1024)
+            print(f"signers-cache (auto): {args.signers_cache} ({size_mb:.1f} MiB)")
+        else:
+            print("signers-cache (auto): none found — VMs will regen on first bench")
+    elif str(args.signers_cache) == "":
+        args.signers_cache = None
+        print("signers-cache: disabled by --signers-cache ''")
+    elif not args.signers_cache.is_file():
+        sys.exit(f"--signers-cache file not found: {args.signers_cache}")
 
     # Default --project to the SA key's project_id field — one less flag in
     # the common case where you bench in the project that owns the SA.
@@ -284,6 +316,12 @@ def run_one_machine(
         print(f"{prefix}==> waiting for SSH (timeout {args.ssh_timeout_s}s)")
         prov.wait_ssh_ready(inst, timeout_s=args.ssh_timeout_s)
 
+        if args.signers_cache is not None:
+            print(f"{prefix}==> uploading signers cache ({args.signers_cache.name})")
+            prov.ssh_exec(inst, 'mkdir -p "$HOME/leanBench-signers"', prefix=prefix)
+            prov.scp_to(inst, args.signers_cache,
+                        f"leanBench-signers/{args.signers_cache.name}")
+
         print(f"{prefix}==> running setup + bench")
         if not prefix:
             print("─" * 64)
@@ -368,6 +406,31 @@ def _detect_repo_url() -> str | None:
     if not remote:
         return None
     return _git("remote", "get-url", remote)
+
+
+def _discover_signers_cache() -> Path | None:
+    """Find a local benchmark_signers_cache_<footprint>.bin matching the
+    pinned leanMultisig SHA in runner-rust/Cargo.toml. The cache file is
+    content-addressed by the hash of signer #0's pubkey, so it's stable
+    across leanMultisig SHAs as long as the XMSS scheme params don't change
+    — but we still narrow to the pinned-SHA checkout dir to avoid grabbing
+    a stale file from an older Rust toolchain or build."""
+    cargo_toml = Path("runner-rust/Cargo.toml")
+    if not cargo_toml.is_file():
+        return None
+    text = cargo_toml.read_text()
+    m = re.search(r'leanMultisig\.git",\s*rev\s*=\s*"([0-9a-f]+)"', text)
+    if not m:
+        return None
+    sha_prefix = m.group(1)[:7]
+    home = Path(os.path.expanduser("~"))
+    matches = sorted(
+        glob.glob(str(home / f".cargo/git/checkouts/leanmultisig-*/{sha_prefix}*"
+                              "/target/signers-cache/benchmark_signers_cache_*.bin")),
+        key=lambda p: Path(p).stat().st_mtime,
+        reverse=True,
+    )
+    return Path(matches[0]) if matches else None
 
 
 def _summary(local_path: Path) -> dict:

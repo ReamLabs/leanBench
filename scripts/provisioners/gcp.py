@@ -148,6 +148,14 @@ class GCPProvisioner:
             check=True,
         )
 
+    def scp_to(self, inst: Instance, local: Path, remote: str) -> None:
+        self._gcloud(
+            "compute", "scp", "--tunnel-through-iap",
+            "--zone", self.zone,
+            str(local), f"{inst.name}:{remote}",
+            check=True,
+        )
+
     def destroy(self, inst: Instance) -> None:
         self._gcloud(
             "compute", "instances", "delete", inst.name,
