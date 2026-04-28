@@ -239,11 +239,7 @@ h2 {
   font-family: var(--mono);
 }
 .machine-cost {
-  color: var(--ink-soft);
-  font-size: 13px;
-  font-family: var(--mono);
   white-space: nowrap;
-  margin-left: auto;
 }
 .run-list {
   display: grid;

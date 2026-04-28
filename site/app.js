@@ -437,16 +437,17 @@ const fmtMonthly = (label) => {
 
 function renderMachineCard(m) {
   const card = el("div", { class: "machine-card" });
-  const meta = `${m.cpu_model || ""} · ${m.physical_cores ?? "?"}p / ${m.logical_cores ?? "?"}l · ${m.memory_gb ?? "?"} GB · ${m.os || ""}`;
   const cost = fmtMonthly(m.label);
-  const head = el("div", { class: "machine-head" },
-    el("h3", { text: m.label || m.fingerprint }),
-    el("div", { class: "machine-meta", text: meta }),
-  );
+  const metaText = `${m.cpu_model || ""} · ${m.physical_cores ?? "?"}p / ${m.logical_cores ?? "?"}l · ${m.memory_gb ?? "?"} GB · ${m.os || ""}`;
+  const meta = el("div", { class: "machine-meta" }, metaText);
   if (cost) {
-    head.appendChild(el("div", { class: "machine-cost", title: cost.title, text: cost.short }));
+    meta.appendChild(document.createTextNode(" · "));
+    meta.appendChild(el("span", { class: "machine-cost", title: cost.title, text: cost.short }));
   }
-  card.appendChild(head);
+  card.appendChild(el("div", { class: "machine-head" },
+    el("h3", { text: m.label || m.fingerprint }),
+    meta,
+  ));
   const runs = el("div", { class: "run-list" });
   for (const r of m.runs || []) {
     const link = el("a", {
