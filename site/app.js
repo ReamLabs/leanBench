@@ -395,10 +395,17 @@ function renderScaling(container, workloadNames, machines) {
       if (treeWorkloads.length) {
         section.appendChild(el("h4", { class: "compare-subgroup-head",
           text: "recursion-only (derived)" }));
+        // Pre-compute every recursion line's points so all charts in this
+        // subgroup share a y-axis ceiling — at-a-glance comparison across
+        // tree variants needs a common scale.
+        const built = treeWorkloads.map((wl) => ({
+          name: wl,
+          points: recursionScalingPoints(wl, c4),
+        })).filter((b) => b.points && b.points.length >= 2);
+        const yMax = niceCeil(Math.max(...built.flatMap((b) => b.points.map((p) => p.y))));
         const recurGrid = el("div", { class: "compare-group-grid" });
-        for (const wl of treeWorkloads) {
-          const card = buildRecursionScalingCard(wl, c4);
-          if (card) recurGrid.appendChild(card);
+        for (const b of built) {
+          recurGrid.appendChild(buildRecursionScalingCard(b.name, b.points, yMax));
         }
         section.appendChild(recurGrid);
       }
@@ -407,7 +414,7 @@ function renderScaling(container, workloadNames, machines) {
   }
 }
 
-function buildRecursionScalingCard(treeName, c4Machines) {
+function recursionScalingPoints(treeName, c4Machines) {
   const m = treeName.match(/^aggregate\.tree_(\d+)x(\d+)_r2$/);
   if (!m) return null;
   const fanIn = parseInt(m[1], 10);
@@ -432,7 +439,13 @@ function buildRecursionScalingCard(treeName, c4Machines) {
     if (recursionNs <= 0) continue;
     points.push({ x: mach.logical_cores, y: recursionNs / 1e6 });
   }
-  if (points.length < 2) return null;
+  return points;
+}
+
+function buildRecursionScalingCard(treeName, points, yMax) {
+  const m = treeName.match(/^aggregate\.tree_(\d+)x(\d+)_r2$/);
+  const fanIn = parseInt(m[1], 10);
+  const leafSize = parseInt(m[2], 10);
 
   const card = el("div", { class: "compare-card" });
   card.appendChild(el("h3", {
@@ -480,7 +493,11 @@ function buildRecursionScalingCard(treeName, c4Machines) {
             },
             ticks: { callback: (v) => v },
           },
-          y: { title: { display: true, text: "ms (mean)" }, beginAtZero: true },
+          y: {
+            title: { display: true, text: "ms (mean)" },
+            beginAtZero: true,
+            max: yMax,
+          },
         },
       },
     });
