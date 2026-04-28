@@ -390,8 +390,102 @@ function renderScaling(container, workloadNames, machines) {
       if (card) grid.appendChild(card);
     }
     section.appendChild(grid);
+    if (group === "aggregate") {
+      const treeWorkloads = grouped[group].filter((n) => /\.tree_\d+x\d+_r2$/.test(n));
+      if (treeWorkloads.length) {
+        section.appendChild(el("h4", { class: "compare-subgroup-head",
+          text: "recursion-only (derived)" }));
+        const recurGrid = el("div", { class: "compare-group-grid" });
+        for (const wl of treeWorkloads) {
+          const card = buildRecursionScalingCard(wl, c4);
+          if (card) recurGrid.appendChild(card);
+        }
+        section.appendChild(recurGrid);
+      }
+    }
     container.appendChild(section);
   }
+}
+
+function buildRecursionScalingCard(treeName, c4Machines) {
+  const m = treeName.match(/^aggregate\.tree_(\d+)x(\d+)_r2$/);
+  if (!m) return null;
+  const fanIn = parseInt(m[1], 10);
+  const leafSize = parseInt(m[2], 10);
+  const flatName = `aggregate.flat_${leafSize}_r2`;
+
+  const bestMean = (machine, name) => {
+    let best = null;
+    for (const r of machine.runs || []) {
+      const w = (r.workloads || []).find((x) => x.name === name);
+      if (w && w.mean_ns != null && (best == null || w.mean_ns < best)) best = w.mean_ns;
+    }
+    return best;
+  };
+
+  const points = [];
+  for (const mach of c4Machines) {
+    const tree = bestMean(mach, treeName);
+    const flat = bestMean(mach, flatName);
+    if (tree == null || flat == null) continue;
+    const recursionNs = tree - fanIn * flat;
+    if (recursionNs <= 0) continue;
+    points.push({ x: mach.logical_cores, y: recursionNs / 1e6 });
+  }
+  if (points.length < 2) return null;
+
+  const card = el("div", { class: "compare-card" });
+  card.appendChild(el("h3", {
+    text: `tree_${fanIn}x${leafSize} recursion = total − ${fanIn} × flat_${leafSize}`,
+  }));
+  const wrap = el("div", { class: "compare-card-chart" });
+  const canvas = el("canvas");
+  wrap.appendChild(canvas);
+  card.appendChild(wrap);
+
+  queueMicrotask(() => {
+    new Chart(canvas.getContext("2d"), {
+      type: "line",
+      data: {
+        datasets: [{
+          data: points,
+          borderColor: "#4a46d9",
+          backgroundColor: "#4a46d922",
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.15,
+          fill: false,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: (items) => `${items[0].parsed.x} logical cores`,
+              label: (ctx) => `${ctx.parsed.y.toFixed(3)} ms (recursion only)`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            type: "logarithmic",
+            title: { display: true, text: "logical cores (vCPU)" },
+            min: points[0].x,
+            max: points[points.length - 1].x,
+            afterBuildTicks: (axis) => {
+              axis.ticks = points.map((p) => ({ value: p.x }));
+            },
+            ticks: { callback: (v) => v },
+          },
+          y: { title: { display: true, text: "ms (mean)" }, beginAtZero: true },
+        },
+      },
+    });
+  });
+  return card;
 }
 
 function buildScalingCard(workloadName, c4Machines) {
