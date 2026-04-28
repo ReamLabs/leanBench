@@ -30,21 +30,27 @@ ROOT = HERE.parent
 
 SCHEMA_VERSION = 1
 
-# (cli-subcommand, workload-name, include-in-default-set)
-ALL_WORKLOADS: list[tuple[str, str, bool]] = [
-    ("leansig-keygen",     "leansig.keygen",           False),
-    ("leansig-sign",       "leansig.sign",             True),
-    ("leansig-verify",     "leansig.verify",           True),
-    ("xmss-keygen",        "xmss.keygen",              False),
-    ("xmss-sign",          "xmss.sign",                True),
-    ("xmss-verify",        "xmss.verify",              True),
-    ("aggregate-flat-125",  "aggregate.flat_125_r2",    True),
-    ("aggregate-flat-250",  "aggregate.flat_250_r2",    True),
-    ("aggregate-flat-500",  "aggregate.flat_500_r2",    True),
-    ("aggregate-flat-1000", "aggregate.flat_1000_r2",   True),
-    ("aggregate-tree-125",  "aggregate.tree_2x125_r2",  True),
-    ("aggregate-tree-250",  "aggregate.tree_2x250_r2",  True),
-    ("aggregate-tree-500",  "aggregate.tree_2x500_r2",  True),
+# (cli-subcommand, workload-name, include-in-default-set, samples-override)
+#
+# `samples-override` (None = use --samples) is for workloads whose per-call
+# cost has heavy intrinsic variance and needs more samples to converge.
+# xmss.sign does rejection sampling against TargetSum + grinding constraints
+# (acceptance ≈ 1 in ~2.3k attempts), giving a geometric-tailed distribution
+# with cv ≈ 0.84. n=30 leaves the mean unstable; bump to 300 for that one.
+ALL_WORKLOADS: list[tuple[str, str, bool, int | None]] = [
+    ("leansig-keygen",      "leansig.keygen",           False, None),
+    ("leansig-sign",        "leansig.sign",             True,  None),
+    ("leansig-verify",      "leansig.verify",           True,  None),
+    ("xmss-keygen",         "xmss.keygen",              False, None),
+    ("xmss-sign",           "xmss.sign",                True,  300),
+    ("xmss-verify",         "xmss.verify",              True,  None),
+    ("aggregate-flat-125",  "aggregate.flat_125_r2",    True,  None),
+    ("aggregate-flat-250",  "aggregate.flat_250_r2",    True,  None),
+    ("aggregate-flat-500",  "aggregate.flat_500_r2",    True,  None),
+    ("aggregate-flat-1000", "aggregate.flat_1000_r2",   True,  None),
+    ("aggregate-tree-125",  "aggregate.tree_2x125_r2",  True,  None),
+    ("aggregate-tree-250",  "aggregate.tree_2x250_r2",  True,  None),
+    ("aggregate-tree-500",  "aggregate.tree_2x500_r2",  True,  None),
 ]
 
 
@@ -69,17 +75,17 @@ def parse_args():
     return ap.parse_args()
 
 
-def select_workloads(args) -> list[tuple[str, str]]:
+def select_workloads(args) -> list[tuple[str, str, int | None]]:
     if args.only:
         requested = set(args.only)
-        selected = [(cmd, name) for (cmd, name, _) in ALL_WORKLOADS if name in requested]
-        missing = requested - {name for (_, name) in selected}
+        selected = [(cmd, name, ovr) for (cmd, name, _, ovr) in ALL_WORKLOADS if name in requested]
+        missing = requested - {name for (_, name, _) in selected}
         if missing:
             sys.exit(f"unknown workload(s): {', '.join(sorted(missing))}")
         return selected
     return [
-        (cmd, name)
-        for (cmd, name, default) in ALL_WORKLOADS
+        (cmd, name, ovr)
+        for (cmd, name, default, ovr) in ALL_WORKLOADS
         if default or args.include_keygen
     ]
 
@@ -173,6 +179,7 @@ def _summarize(samples: list[int]) -> dict:
         "mean_ns": int(mean),
         "stddev_ns": int(math.sqrt(var)),
         "min_ns": int(s[0]),
+        "p5_ns":  int(s[max(0, int(n * 0.05))]),
         "p50_ns": int(s[n // 2]),
         "p95_ns": int(s[max(0, int(n * 0.95) - 1)]),
         "max_ns": int(s[-1]),
@@ -205,13 +212,15 @@ def main():
 
     workloads_to_run = select_workloads(args)
     print(f"Running {len(workloads_to_run)} workload(s): "
-          f"{', '.join(name for _, name in workloads_to_run)}")
+          f"{', '.join(name for _, name, _ in workloads_to_run)}")
     print()
 
     workload_results = []
-    for subcmd, name in workloads_to_run:
-        print(f"  → {name} ...", end="", flush=True)
-        rec = run_workload(binary, subcmd, args.samples, args.warmup)
+    for subcmd, name, samples_override in workloads_to_run:
+        n = samples_override if samples_override is not None else args.samples
+        suffix = f" (n={n})" if samples_override is not None else ""
+        print(f"  → {name}{suffix} ...", end="", flush=True)
+        rec = run_workload(binary, subcmd, n, args.warmup)
         if rec:
             mean_ms = rec["timing"]["mean_ns"] / 1e6
             print(f" {mean_ms:.2f} ms (n={rec['timing']['n']})")
