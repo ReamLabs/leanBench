@@ -251,6 +251,11 @@ function renderCompare(container, workloadNames, machines) {
     const section = el("div", { class: "compare-group" },
       el("h3", { class: "compare-group-head", text: displayLabel(group) }),
     );
+    if (group === "aggregate") {
+      section.appendChild(el("p", { class: "compare-group-note" },
+        "tree timing = 2 × leaf + recursion. Recursion-only cost ≈ tree − 2·flat.",
+      ));
+    }
     const grid = el("div", { class: "compare-group-grid" });
     for (const wl of grouped[group]) {
       grid.appendChild(buildCompareCard(wl, machines));
