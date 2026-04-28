@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "run_id": "2026-04-28T11-17-16Z__7acfb79a54",
+  "timestamp": "2026-04-28T11:17:16.616273+00:00",
+  "machine": {
+    "fingerprint": "7acfb79a54",
+    "cpu_model": "INTEL(R) XEON(R) PLATINUM 8581C CPU @ 2.30GHz",
+    "cpu_arch": "x86_64",
+    "physical_cores": 16,
+    "logical_cores": 32,
+    "memory_gb": 117.9,
+    "os": "Linux 6.17.0-1012-gcp",
+    "kernel": "#12~24.04.1-Ubuntu SMP Fri Mar 27 23:35:04 UTC 2026",
+    "label": "c4-standard-32"
+  },
+  "toolchain": {
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "git_shas": {
+      "leanmultisig_sha": "c09c85ab089f40ca081c3c07c3625490f39026c7",
+      "leansig_sha": "16c660e93c60240de113fdca6be7455d6d7721a1"
+    }
+  },
+  "workloads": [
+    {
+      "name": "aggregate.tree_4x125_r2",
+      "unit": "ns",
+      "samples_ns": [
+        2820046097,
+        2868971269,
+        2837482898,
+        2850125848,
+        2832518181,
+        2864585807,
+        2832873045,
+        2758853270,
+        2720810384,
+        2798298249,
+        2738436076,
+        2727356827,
+        2735874208,
+        2765524513,
+        2799371085,
+        2799797878,
+        2847124260,
+        2858895457,
+        2847674138,
+        2809601449,
+        2767370181,
+        2754571215,
+        2752775393,
+        2792962272,
+        2781651187,
+        2735195805,
+        2766031067,
+        2782239034,
+        2813044815,
+        2756860768
+      ],
+      "timing": {
+        "n": 30,
+        "mean_ns": 2793897422,
+        "stddev_ns": 44761099,
+        "min_ns": 2720810384,
+        "p5_ns": 2727356827,
+        "p50_ns": 2798298249,
+        "p95_ns": 2858895457,
+        "max_ns": 2868971269
+      },
+      "resources": {
+        "cpu_percent": {
+          "mean": 2678.4,
+          "peak": 3224.1
+        },
+        "rss_bytes": {
+          "mean": 863244619,
+          "peak": 3857543168
+        },
+        "n_samples": 2127,
+        "interval_ms": 100
+      },
+      "meta": {
+        "fan_in": 4,
+        "leaf_raw_xmss": 125,
+        "log_inv_rate": 2,
+        "note": "total wall time includes all four leaves; subtract 4 \u00d7 aggregate.flat_125_r2 for recursion-only cost",
+        "topology": "4-to-1 recursion"
+      }
+    },
+    {
+      "name": "aggregate.tree_4x250_r2",
+      "unit": "ns",
+      "samples_ns": [
+        3910081628,
+        3941473996,
+        3904153152,
+        3912366785,
+        3878708970,
+        3900203048,
+        3906374224,
+        3870873782,
+        3878517412,
+        3925915673,
+        3890930190,
+        3894572141,
+        3888098343,
+        3912317019,
+        3884327071,
+        3831211325,
+        3861561360,
+        3939775229,
+        3865581633,
+        3902557609,
+        3880728189,
+        3861350973,
+        3850139604,
+        3858670589,
+        3864885833,
+        3896141712,
+        3872132342,
+        3843980992,
+        3880158918,
+        3925605902
+      ],
+      "timing": {
+        "n": 30,
+        "mean_ns": 3887779854,
+        "stddev_ns": 27475414,
+        "min_ns": 3831211325,
+        "p5_ns": 3843980992,
+        "p50_ns": 3888098343,
+        "p95_ns": 3925915673,
+        "max_ns": 3941473996
+      },
+      "resources": {
+        "cpu_percent": {
+          "mean": 2075.0,
+          "peak": 3222.7
+        },
+        "rss_bytes": {
+          "mean": 1959960754,
+          "peak": 3735339008
+        },
+        "n_samples": 1238,
+        "interval_ms": 100
+      },
+      "meta": {
+        "fan_in": 4,
+        "leaf_raw_xmss": 250,
+        "log_inv_rate": 2,
+        "note": "total wall time includes all four leaves; subtract 4 \u00d7 aggregate.flat_250_r2 for recursion-only cost",
+        "topology": "4-to-1 recursion"
+      }
+    },
+    {
+      "name": "aggregate.tree_4x500_r2",
+      "unit": "ns",
+      "samples_ns": [
+        7101678883,
+        7190835418,
+        7171541516,
+        7236815191,
+        7191133558,
+        7158451956,
+        7166342370,
+        7137886047,
+        7186681101,
+        7146905463,
+        7167569464,
+        7225285228,
+        7143431925,
+        7202901395,
+        7170750081,
+        7138703159,
+        7185038837,
+        7223878033,
+        7296228728,
+        7267701074,
+        7306586279,
+        7276413620,
+        7130527902,
+        7064694830,
+        7081946668,
+        7006888314,
+        7240732568,
+        7297625073,
+        7167832512,
+        7116399212
+      ],
+      "timing": {
+        "n": 30,
+        "mean_ns": 7179980213,
+        "stddev_ns": 70615610,
+        "min_ns": 7006888314,
+        "p5_ns": 7064694830,
+        "p50_ns": 7171541516,
+        "p95_ns": 7296228728,
+        "max_ns": 7306586279
+      },
+      "resources": {
+        "cpu_percent": {
+          "mean": 2133.3,
+          "peak": 3225.6
+        },
+        "rss_bytes": {
+          "mean": 2785890817,
+          "peak": 6311596032
+        },
+        "n_samples": 2234,
+        "interval_ms": 100
+      },
+      "meta": {
+        "fan_in": 4,
+        "leaf_raw_xmss": 500,
+        "log_inv_rate": 2,
+        "note": "total wall time includes all four leaves; subtract 4 \u00d7 aggregate.flat_500_r2 for recursion-only cost",
+        "topology": "4-to-1 recursion"
+      }
+    }
+  ],
+  "notes": ""
+}
