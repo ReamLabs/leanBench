@@ -32,11 +32,10 @@ SCHEMA_VERSION = 1
 
 # (cli-subcommand, workload-name, include-in-default-set, samples-override)
 #
-# `samples-override` (None = use --samples) is for workloads whose per-call
-# cost has heavy intrinsic variance and needs more samples to converge.
-# xmss.sign does rejection sampling against TargetSum + grinding constraints
-# (acceptance ≈ 1 in ~2.3k attempts), giving a geometric-tailed distribution
-# with cv ≈ 0.84. n=30 leaves the mean unstable; bump to 300 for that one.
+# xmss.sign uses rejection sampling against WOTS+ TargetSum + grinding
+# (acceptance ≈ 1 in ~2.3k attempts), so per-sign cost is heavy-tailed
+# (cv ≈ 0.84) and n=30 leaves the mean's 95% CI at ±64 ms; n=300 tightens
+# it to ±26 ms. Other workloads sit at cv ≈ 0.05 and stay at n=30.
 ALL_WORKLOADS: list[tuple[str, str, bool, int | None]] = [
     ("leansig-keygen",      "leansig.keygen",           False, None),
     ("leansig-sign",        "leansig.sign",             True,  None),
