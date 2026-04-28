@@ -222,4 +222,40 @@ pub mod aggregate {
     pub fn tree_2x125_r2(args: &CommonArgs) -> Result<Record> { tree_2xn_r2(args, 125) }
     pub fn tree_2x250_r2(args: &CommonArgs) -> Result<Record> { tree_2xn_r2(args, 250) }
     pub fn tree_2x500_r2(args: &CommonArgs) -> Result<Record> { tree_2xn_r2(args, 500) }
+
+    /// 4-to-1 recursion: root combines four `n`-sig leaves at LOG_INV_RATE_PROD=2.
+    /// Reports total wall time including all four leaves + the recursion step.
+    /// Subtract `4 × aggregate.flat_<n>_r2` for the recursion-only cost.
+    fn tree_4xn_r2(args: &CommonArgs, n: usize) -> Result<Record> {
+        let leaf = AggregationTopology { raw_xmss: n, children: vec![], log_inv_rate: 2 };
+        let topology = AggregationTopology {
+            raw_xmss: 0,
+            children: vec![leaf.clone(), leaf.clone(), leaf.clone(), leaf],
+            log_inv_rate: 2,
+        };
+        let mut samples = Vec::with_capacity(args.samples);
+        for i in 0..(args.samples + args.warmup) {
+            let t = std::time::Instant::now();
+            let _ = run_aggregation_benchmark(&topology, 0, false);
+            if i >= args.warmup {
+                samples.push(t.elapsed().as_nanos());
+            }
+        }
+        Ok(make_record(
+            &format!("aggregate.tree_4x{n}_r2"),
+            samples,
+            args.warmup,
+            serde_json::json!({
+                "leaf_raw_xmss": n,
+                "fan_in": 4,
+                "log_inv_rate": 2,
+                "topology": "4-to-1 recursion",
+                "note": format!("total wall time includes all four leaves; subtract 4 × aggregate.flat_{n}_r2 for recursion-only cost"),
+            }),
+        ))
+    }
+
+    pub fn tree_4x125_r2(args: &CommonArgs) -> Result<Record> { tree_4xn_r2(args, 125) }
+    pub fn tree_4x250_r2(args: &CommonArgs) -> Result<Record> { tree_4xn_r2(args, 250) }
+    pub fn tree_4x500_r2(args: &CommonArgs) -> Result<Record> { tree_4xn_r2(args, 500) }
 }

@@ -50,6 +50,9 @@ ALL_WORKLOADS: list[tuple[str, str, bool, int | None]] = [
     ("aggregate-tree-125",  "aggregate.tree_2x125_r2",  True,  None),
     ("aggregate-tree-250",  "aggregate.tree_2x250_r2",  True,  None),
     ("aggregate-tree-500",  "aggregate.tree_2x500_r2",  True,  None),
+    ("aggregate-tree4-125", "aggregate.tree_4x125_r2",  True,  None),
+    ("aggregate-tree4-250", "aggregate.tree_4x250_r2",  True,  None),
+    ("aggregate-tree4-500", "aggregate.tree_4x500_r2",  True,  None),
 ]
 
 
