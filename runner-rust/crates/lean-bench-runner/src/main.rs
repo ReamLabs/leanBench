@@ -45,12 +45,21 @@ enum Cli {
     // letter and a digit (`AggregateFlat500` → `aggregate-flat500`), so we
     // override the CLI name explicitly to keep the dash-separated form that
     // bench.py and humans expect.
+    #[command(name = "aggregate-flat-125",
+              about = "Aggregation: flat 125-sig leaf at LOG_INV_RATE_PROD=2")]
+    AggregateFlat125(CommonArgs),
+    #[command(name = "aggregate-flat-250",
+              about = "Aggregation: flat 250-sig leaf at LOG_INV_RATE_PROD=2")]
+    AggregateFlat250(CommonArgs),
     #[command(name = "aggregate-flat-500",
               about = "Aggregation: flat 500-sig leaf at LOG_INV_RATE_PROD=2")]
     AggregateFlat500(CommonArgs),
     #[command(name = "aggregate-flat-1000",
               about = "Aggregation: flat 1000-sig leaf at LOG_INV_RATE_PROD=2")]
     AggregateFlat1000(CommonArgs),
+    #[command(name = "aggregate-tree-125",
+              about = "Aggregation: 2-to-1 recursion over two 125-sig leaves at r=2")]
+    AggregateTree125(CommonArgs),
     #[command(name = "aggregate-tree-250",
               about = "Aggregation: 2-to-1 recursion over two 250-sig leaves at r=2")]
     AggregateTree250(CommonArgs),
@@ -96,8 +105,11 @@ fn main() -> Result<()> {
         Cli::XmssKeygen(a)    => workloads::xmss_wl::keygen(&a),
         Cli::XmssSign(a)      => workloads::xmss_wl::sign(&a),
         Cli::XmssVerify(a)    => workloads::xmss_wl::verify(&a),
+        Cli::AggregateFlat125(a)  => workloads::aggregate::flat_125_r2(&a),
+        Cli::AggregateFlat250(a)  => workloads::aggregate::flat_250_r2(&a),
         Cli::AggregateFlat500(a)  => workloads::aggregate::flat_500_r2(&a),
         Cli::AggregateFlat1000(a) => workloads::aggregate::flat_1000_r2(&a),
+        Cli::AggregateTree125(a)  => workloads::aggregate::tree_2x125_r2(&a),
         Cli::AggregateTree250(a)  => workloads::aggregate::tree_2x250_r2(&a),
         Cli::AggregateTree500(a)  => workloads::aggregate::tree_2x500_r2(&a),
         Cli::Provenance => {

@@ -38,8 +38,11 @@ ALL_WORKLOADS: list[tuple[str, str, bool]] = [
     ("xmss-keygen",        "xmss.keygen",              False),
     ("xmss-sign",          "xmss.sign",                True),
     ("xmss-verify",        "xmss.verify",              True),
+    ("aggregate-flat-125",  "aggregate.flat_125_r2",    True),
+    ("aggregate-flat-250",  "aggregate.flat_250_r2",    True),
     ("aggregate-flat-500",  "aggregate.flat_500_r2",    True),
     ("aggregate-flat-1000", "aggregate.flat_1000_r2",   True),
+    ("aggregate-tree-125",  "aggregate.tree_2x125_r2",  True),
     ("aggregate-tree-250",  "aggregate.tree_2x250_r2",  True),
     ("aggregate-tree-500",  "aggregate.tree_2x500_r2",  True),
 ]

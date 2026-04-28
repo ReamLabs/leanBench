@@ -182,6 +182,8 @@ pub mod aggregate {
         ))
     }
 
+    pub fn flat_125_r2(args: &CommonArgs) -> Result<Record> { flat_n_r2(args, 125) }
+    pub fn flat_250_r2(args: &CommonArgs) -> Result<Record> { flat_n_r2(args, 250) }
     pub fn flat_500_r2(args: &CommonArgs) -> Result<Record> { flat_n_r2(args, 500) }
     pub fn flat_1000_r2(args: &CommonArgs) -> Result<Record> { flat_n_r2(args, 1000) }
 
@@ -217,6 +219,7 @@ pub mod aggregate {
         ))
     }
 
+    pub fn tree_2x125_r2(args: &CommonArgs) -> Result<Record> { tree_2xn_r2(args, 125) }
     pub fn tree_2x250_r2(args: &CommonArgs) -> Result<Record> { tree_2xn_r2(args, 250) }
     pub fn tree_2x500_r2(args: &CommonArgs) -> Result<Record> { tree_2xn_r2(args, 500) }
 }
