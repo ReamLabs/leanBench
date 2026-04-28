@@ -258,7 +258,7 @@ function renderCompare(container, workloadNames, machines) {
     section.appendChild(grid);
     if (group === "aggregate") {
       section.appendChild(el("p", { class: "compare-group-note" },
-        "Note: aggregate.tree timing = 2 × leaf + recursion. Recursion-only cost ≈ tree − 2·flat.",
+        "Note: aggregate.tree timing = 2 × leaf + recursion. Recursion-only cost ≈ total − 2 × flat.",
       ));
     }
     container.appendChild(section);
