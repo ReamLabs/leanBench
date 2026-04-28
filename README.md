@@ -66,6 +66,7 @@ The default matrix is intentionally small and EIP-7870-anchored:
   - `c4-standard-4` — Granite Rapids / AVX-512, A/B partner for n1 (isolates SIMD gen)
   - `c4-standard-8` — Granite Rapids / AVX-512, EIP-7870 Full Node tier
   - `c4-standard-16` — Granite Rapids / AVX-512, EIP-7870 Attester tier
+  - `c4-standard-32` — Granite Rapids / AVX-512, high-end Rayon-scaling reference
 
 Parallel by default (~30 min wall time, all four VMs running at once,
 output line-prefixed with machine type so streams stay readable). Pass
