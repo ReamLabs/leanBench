@@ -66,6 +66,17 @@ const el = (tag, attrs = {}, ...children) => {
   return n;
 };
 
+// Round `v` up to the next "nice" axis tick: 1/1.5/2/2.5/3/4/5/7.5/10
+// times the appropriate power of ten. Used to give comparison charts a
+// readable upper bound on the x-axis instead of `maxValue * 1.04`.
+const niceCeil = (v) => {
+  if (!(v > 0)) return 1;
+  const exp = Math.pow(10, Math.floor(Math.log10(v)));
+  const f = v / exp;
+  const fractions = [1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10];
+  return fractions.find((nf) => nf >= f) * exp;
+};
+
 // Colour palette for series — keeps machine lines visually distinct.
 const PALETTE = [
   "#4a46d9", "#0891b2", "#16a34a", "#d97706",
@@ -260,26 +271,60 @@ function buildCompareCard(workloadName, machines) {
   // Build per-machine entries first, THEN sort by speed (fastest first).
   // Color is bound to the machine's original list index so the same machine
   // keeps the same color across charts — only the ordering changes per chart.
+  // Capture p5 + p95 alongside mean from the same "best run" so whiskers
+  // correspond to that specific run, not a mix.
   const entries = [];
   for (const [i, m] of machines.entries()) {
     let best = null;
+    let bestP5 = null;
+    let bestP95 = null;
     for (const r of m.runs || []) {
       const w = (r.workloads || []).find((x) => x.name === workloadName);
-      if (w && w.mean_ns != null && (best == null || w.mean_ns < best)) best = w.mean_ns;
+      if (w && w.mean_ns != null && (best == null || w.mean_ns < best)) {
+        best = w.mean_ns;
+        bestP5 = w.p5_ns ?? null;
+        bestP95 = w.p95_ns ?? null;
+      }
     }
     if (best != null) {
-      entries.push({ label: m.label, value: best / 1e6, color: colorFor(i) });
+      entries.push({
+        label: m.label,
+        value: best / 1e6,
+        p5:  bestP5  != null ? bestP5  / 1e6 : null,
+        p95: bestP95 != null ? bestP95 / 1e6 : null,
+        color: colorFor(i),
+      });
     }
   }
   entries.sort((a, b) => a.value - b.value);
   const labels = entries.map((e) => e.label);
   const values = entries.map((e) => e.value);
+  const p5Values = entries.map((e) => e.p5);
+  const p95Values = entries.map((e) => e.p95);
   const colors = entries.map((e) => e.color);
+
+  // Force the x-axis to extend past the longest right whisker so p95 caps
+  // never get clipped, and round up to a "nice" multiple of 1/2/2.5/5×10^k
+  // so the axis ticks land on readable numbers (12 → 15, 377 → 400, etc.).
+  const maxRight = Math.max(
+    ...values,
+    ...p95Values.filter((v) => v != null),
+  );
+  const xMax = niceCeil(maxRight);
 
   queueMicrotask(() => {
     new Chart(canvas.getContext("2d"), {
       type: "bar",
-      data: { labels, datasets: [{ data: values, backgroundColor: colors, borderRadius: 4 }] },
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          backgroundColor: colors,
+          borderRadius: 4,
+          p5: p5Values,
+          p95: p95Values,
+        }],
+      },
       options: {
         indexAxis: "y",
         responsive: true,
@@ -288,19 +333,83 @@ function buildCompareCard(workloadName, machines) {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: (ctx) => `${ctx.parsed.x.toFixed(3)} ms (best mean)`,
+              // Multi-line tooltip — first line is the headline mean, then
+              // p5/p95 only if we have them. Returning an array gives us
+              // one DOM line per element.
+              label: (ctx) => {
+                const out = [`mean   ${ctx.parsed.x.toFixed(3)} ms  (best run)`];
+                const p5 = p5Values[ctx.dataIndex];
+                const p95 = p95Values[ctx.dataIndex];
+                if (p5  != null) out.unshift(`p5     ${p5.toFixed(3)} ms`);
+                if (p95 != null) out.push(`p95    ${p95.toFixed(3)} ms`);
+                return out;
+              },
             },
           },
         },
         scales: {
-          x: { title: { display: true, text: "ms (best mean)" }, beginAtZero: true },
+          x: { title: { display: true, text: "ms" }, beginAtZero: true, max: xMax },
           y: { ticks: { font: { family: getComputedStyle(document.body).getPropertyValue("--mono") } } },
         },
       },
+      plugins: [variancePlugin],
     });
   });
   return card;
 }
+
+// Draws a horizontal whisker on each bar — leftward from p5 to mean, and
+// rightward from mean to p95, each with a small cap. Lives outside per-
+// chart code so it's registered once per Chart instance via `plugins:`.
+// p5 / p95 values are passed in via `dataset.p5` and `dataset.p95`.
+const variancePlugin = {
+  id: "variance",
+  afterDatasetDraw(chart, args) {
+    const { ctx } = chart;
+    const meta = chart.getDatasetMeta(args.index);
+    const dataset = chart.data.datasets[args.index];
+    const p5s  = dataset.p5;
+    const p95s = dataset.p95;
+    if (!Array.isArray(p5s) && !Array.isArray(p95s)) return;
+
+    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = dark ? "rgba(240, 240, 234, 0.85)" : "rgba(26, 26, 26, 0.75)";
+
+    const drawSegment = (x1, x2, y, cap) => {
+      ctx.beginPath();
+      ctx.moveTo(x1, y);
+      ctx.lineTo(x2, y);
+      ctx.moveTo(x2, y - cap);
+      ctx.lineTo(x2, y + cap);
+      ctx.stroke();
+    };
+
+    meta.data.forEach((bar, i) => {
+      const meanX = bar.x;
+      const y = bar.y;
+      const cap = Math.min(7, (bar.height ?? 12) * 0.4);
+
+      // Right whisker: mean → p95 (lives on chart background)
+      const p95 = (p95s || [])[i];
+      if (p95 != null) {
+        const p95X = chart.scales.x.getPixelForValue(p95);
+        if (p95X > meanX) drawSegment(meanX, p95X, y, cap);
+      }
+
+      // Left whisker: p5 → mean (lives on top of the colored bar fill)
+      const p5 = (p5s || [])[i];
+      if (p5 != null) {
+        const p5X = chart.scales.x.getPixelForValue(p5);
+        if (p5X < meanX) drawSegment(meanX, p5X, y, cap);
+      }
+    });
+
+    ctx.restore();
+  },
+};
 
 function renderMachineCard(m) {
   const card = el("div", { class: "machine-card" });

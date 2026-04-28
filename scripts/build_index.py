@@ -87,10 +87,24 @@ def main():
 
 
 def _summarize(rec: dict, filename: str) -> dict:
+    # p5_ns wasn't in older _summarize() output; derive it from samples_ns
+    # when missing so existing result files still get a low whisker on the
+    # site without needing a re-bench.
+    def _p5(w: dict) -> int | None:
+        t = w.get("timing") or {}
+        if t.get("p5_ns") is not None:
+            return t["p5_ns"]
+        samples = w.get("samples_ns") or []
+        if not samples:
+            return None
+        s = sorted(samples)
+        return int(s[max(0, int(len(s) * 0.05))])
+
     workloads = [
-        {"name": w.get("name"),
+        {"name":    w.get("name"),
          "mean_ns": (w.get("timing") or {}).get("mean_ns"),
-         "p95_ns": (w.get("timing") or {}).get("p95_ns")}
+         "p5_ns":   _p5(w),
+         "p95_ns":  (w.get("timing") or {}).get("p95_ns")}
         for w in rec.get("workloads", [])
     ]
     shas = (rec.get("toolchain") or {}).get("git_shas") or {}
