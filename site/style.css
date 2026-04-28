@@ -238,6 +238,13 @@ h2 {
   font-size: 13px;
   font-family: var(--mono);
 }
+.machine-cost {
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-family: var(--mono);
+  white-space: nowrap;
+  margin-left: auto;
+}
 .run-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

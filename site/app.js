@@ -411,13 +411,42 @@ const variancePlugin = {
   },
 };
 
+// Approximate on-demand list price (USD/hour) for the GCP machine types
+// in the default remote-bench matrix, us-central1, as of 2026-04. Used
+// only for a "≈$N/mo" hint on machine cards — not sustained-use or
+// committed-use discounted, so treat as upper bound. Local machines (no
+// matching key) get no cost shown.
+const GCP_USD_PER_HOUR = {
+  "n1-standard-4":   0.190,
+  "c4-standard-4":   0.210,
+  "c4-standard-8":   0.420,
+  "c4-standard-16":  0.840,
+  "c4-standard-32":  1.680,
+};
+const HOURS_PER_MONTH = 730;
+
+const fmtMonthly = (label) => {
+  const hourly = GCP_USD_PER_HOUR[label];
+  if (hourly == null) return null;
+  const monthly = Math.round(hourly * HOURS_PER_MONTH);
+  return {
+    short: `≈$${monthly.toLocaleString()}/mo`,
+    title: `GCP ${label} · us-central1 on-demand · $${hourly.toFixed(3)}/hr × ${HOURS_PER_MONTH} h ≈ $${monthly}/mo (no SUD/CUD applied)`,
+  };
+};
+
 function renderMachineCard(m) {
   const card = el("div", { class: "machine-card" });
-  card.appendChild(el("div", { class: "machine-head" },
+  const meta = `${m.cpu_model || ""} · ${m.physical_cores ?? "?"}p / ${m.logical_cores ?? "?"}l · ${m.memory_gb ?? "?"} GB · ${m.os || ""}`;
+  const cost = fmtMonthly(m.label);
+  const head = el("div", { class: "machine-head" },
     el("h3", { text: m.label || m.fingerprint }),
-    el("div", { class: "machine-meta" },
-      `${m.cpu_model || ""} · ${m.physical_cores ?? "?"}p / ${m.logical_cores ?? "?"}l · ${m.memory_gb ?? "?"} GB · ${m.os || ""}`),
-  ));
+    el("div", { class: "machine-meta", text: meta }),
+  );
+  if (cost) {
+    head.appendChild(el("div", { class: "machine-cost", title: cost.title, text: cost.short }));
+  }
+  card.appendChild(head);
   const runs = el("div", { class: "run-list" });
   for (const r of m.runs || []) {
     const link = el("a", {
