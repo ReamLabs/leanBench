@@ -365,9 +365,13 @@ function buildScalingCard(workloadName, c4Machines) {
             title: { display: true, text: "logical cores (vCPU)" },
             min: points[0].x,
             max: points[points.length - 1].x,
-            ticks: {
-              callback: (v) => Number.isInteger(Math.log2(v)) ? v : null,
+            // Chart.js's default log ticks are decade-based (4,5,…,9,10,20,30),
+            // so 16 never lands as a candidate. Replace the tick set with
+            // exactly the data-point values so each c4 size gets its own label.
+            afterBuildTicks: (axis) => {
+              axis.ticks = points.map((p) => ({ value: p.x }));
             },
+            ticks: { callback: (v) => v },
           },
           y: { title: { display: true, text: "ms (mean)" }, beginAtZero: true },
         },
