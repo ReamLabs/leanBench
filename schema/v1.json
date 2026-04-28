@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "lean-bench run record (v1)",
+  "title": "leanBench run record (v1)",
   "description": "One per benchmark run on a target machine. Additive-only evolution: later schema versions may add fields but must not remove or repurpose existing ones. The site always branches on `schema_version`.",
   "type": "object",
   "required": ["schema_version", "run_id", "timestamp", "machine", "workloads"],

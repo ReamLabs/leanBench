@@ -1,5 +1,5 @@
 [project]
-name = "lean-bench"
+name = "leanBench"
 version = "0.1.0"
 description = "Performance benchmarks for leanSig and leanMultisig across hardware."
 requires-python = ">=3.10"

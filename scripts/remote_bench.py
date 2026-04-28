@@ -74,11 +74,11 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
-if [ ! -d lean-bench ]; then
+if [ ! -d leanBench ]; then
     echo "==> [remote] cloning {repo_url}"
-    git clone --depth 1 --branch {branch} {repo_url} lean-bench
+    git clone --depth 1 --branch {branch} {repo_url} leanBench
 fi
-cd lean-bench
+cd leanBench
 git fetch origin {branch} --quiet
 git checkout --quiet {branch}
 git reset --hard --quiet origin/{branch}
@@ -121,7 +121,7 @@ def main():
     ap.add_argument("--image-project", default="ubuntu-os-cloud",
                     help="Image source project (e.g. ubuntu-os-cloud, debian-cloud)")
     ap.add_argument("--repo-url", default=None,
-                    help="Where the VM should clone lean-bench from. "
+                    help="Where the VM should clone leanBench from. "
                          "Defaults to `git remote get-url origin` of the local checkout.")
     ap.add_argument("--branch", default="main")
     ap.add_argument("--bench-args", default="",
@@ -301,12 +301,12 @@ def run_one_machine(
 
         marker = prov.ssh_capture(
             inst,
-            "cd lean-bench && ls -t results/*.json 2>/dev/null "
+            "cd leanBench && ls -t results/*.json 2>/dev/null "
             "| grep -v 'results/index.json' | head -1",
         )
         if not marker:
             raise RuntimeError("bench finished but no result JSON found on remote")
-        remote_path = f"lean-bench/{marker}"
+        remote_path = f"leanBench/{marker}"
 
         args.out_dir.mkdir(parents=True, exist_ok=True)
         local_path = args.out_dir / Path(marker).name

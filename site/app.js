@@ -1,4 +1,4 @@
-// lean-bench static site — list + detail views + charts.
+// leanBench static site — list + detail views + charts.
 //
 // Data contract: `results/index.json` lists all runs grouped by machine;
 // per-run detail comes from `results/<filename>.json`. The index is

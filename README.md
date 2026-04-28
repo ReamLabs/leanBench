@@ -1,4 +1,4 @@
-# lean-bench
+# leanBench
 
 **Performance benchmarks for leanSig and leanMultisig across hardware.**
 
@@ -30,8 +30,8 @@ Python side (psutil); cargo fetches everything the runner binary needs.
 curl -LsSf https://astral.sh/uv/install.sh | sh          # uv
 curl https://sh.rustup.rs -sSf | sh                      # rustc
 
-git clone <this-repo> lean-bench
-cd lean-bench
+git clone <this-repo> leanBench
+cd leanBench
 
 # Run (default workloads, ~5-10 min on a modern machine).
 # --label is optional; defaults to a CPU-derived slug.
@@ -93,7 +93,7 @@ needs.
 1. **Create a service account**:
    ```bash
    gcloud iam service-accounts create lean-bench \
-       --display-name="lean-bench remote runner" \
+       --display-name="leanBench remote runner" \
        --project=$PROJECT
    ```
 
@@ -112,7 +112,7 @@ needs.
 
    ```bash
    gcloud iam roles create leanBenchRunner --project=$PROJECT \
-       --title="lean-bench runner" \
+       --title="leanBench runner" \
        --permissions=compute.instances.create,compute.instances.delete,compute.instances.get,compute.instances.setMetadata,compute.instances.setLabels,compute.disks.create,compute.subnetworks.use,compute.subnetworks.useExternalIp,compute.zones.get,compute.projects.get,iap.tunnelInstances.accessViaIAP
    ```
 
@@ -176,7 +176,7 @@ family) — stable across runs on the same machine so the site groups them.
 ## Layout
 
 ```
-lean-bench/
+leanBench/
 ├─ pyproject.toml                primary project; uv commands live here
 ├─ uv.lock
 ├─ runner/                       Python orchestrator (entry: `uv run bench`)

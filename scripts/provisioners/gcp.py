@@ -31,7 +31,7 @@ class GCPProvisioner:
     _activated: bool = field(default=False, init=False)
 
     def __post_init__(self) -> None:
-        self.cfg_dir = Path(tempfile.mkdtemp(prefix="lean-bench-gcloud-"))
+        self.cfg_dir = Path(tempfile.mkdtemp(prefix="leanBench-gcloud-"))
         self._gcloud(
             "auth", "activate-service-account",
             "--key-file", str(self.credentials_path),

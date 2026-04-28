@@ -1,4 +1,4 @@
-"""lean-bench orchestrator.
+"""leanBench orchestrator.
 
 Usage:
     python runner/bench.py --label my-laptop

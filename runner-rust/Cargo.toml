@@ -33,7 +33,7 @@ codegen-units = 1
 debug = 1
 
 # Local iteration: uncomment to point at sibling checkouts of the upstream
-# repos alongside lean-bench (i.e. under workspace/). Keep commented in
+# repos alongside leanBench (i.e. under workspace/). Keep commented in
 # committed code so fresh clones pull the pinned upstream SHAs.
 #
 # [patch."https://github.com/leanEthereum/leanSig.git"]
