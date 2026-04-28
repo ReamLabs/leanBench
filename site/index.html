@@ -41,7 +41,7 @@
 
     <section id="scaling">
       <h2>Scaling on c4 (timing vs cores)</h2>
-      <p class="section-note">Granite Rapids only — same per-core arch across the four c4-standard-* sizes, so the only thing changing is core count. Per-workload mean (best run) on a log-scaled physical-core axis.</p>
+      <p class="section-note">Granite Rapids only — same per-core arch across the four c4-standard-* sizes, so the only thing changing is core count. X axis is logical cores (vCPU) since that's what GCP charges per and what Rayon's threadpool sizes itself to; per-workload mean (best run) on the y axis.</p>
       <div id="scaling-grid"></div>
     </section>
 

@@ -275,8 +275,8 @@ function renderCompare(container, workloadNames, machines) {
 function renderScaling(container, workloadNames, machines) {
   const c4 = machines
     .filter((m) => /^c4-standard-\d+$/.test(m.label || ""))
-    .filter((m) => m.physical_cores != null)
-    .sort((a, b) => a.physical_cores - b.physical_cores);
+    .filter((m) => m.logical_cores != null)
+    .sort((a, b) => a.logical_cores - b.logical_cores);
 
   if (c4.length < 2) {
     container.appendChild(el("p", { class: "section-note",
@@ -320,7 +320,7 @@ function buildScalingCard(workloadName, c4Machines) {
       const w = (r.workloads || []).find((x) => x.name === workloadName);
       if (w && w.mean_ns != null && (best == null || w.mean_ns < best)) best = w.mean_ns;
     }
-    if (best != null) points.push({ x: m.physical_cores, y: best / 1e6 });
+    if (best != null) points.push({ x: m.logical_cores, y: best / 1e6 });
   }
   if (points.length < 2) return null;
 
@@ -354,7 +354,7 @@ function buildScalingCard(workloadName, c4Machines) {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              title: (items) => `${items[0].parsed.x} physical cores`,
+              title: (items) => `${items[0].parsed.x} logical cores`,
               label: (ctx) => `${ctx.parsed.y.toFixed(3)} ms`,
             },
           },
@@ -362,7 +362,7 @@ function buildScalingCard(workloadName, c4Machines) {
         scales: {
           x: {
             type: "logarithmic",
-            title: { display: true, text: "physical cores" },
+            title: { display: true, text: "logical cores (vCPU)" },
             min: points[0].x,
             max: points[points.length - 1].x,
             ticks: {
