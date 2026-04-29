@@ -100,11 +100,24 @@ def _summarize(rec: dict, filename: str) -> dict:
         s = sorted(samples)
         return int(s[max(0, int(len(s) * 0.05))])
 
+    def _proof(w: dict) -> dict:
+        # Surface root + leaf scalars (most analyses pluck these) plus the
+        # full per-path list when available. Older runs without proof data
+        # leave these unset.
+        meta = w.get("meta") or {}
+        out = {}
+        for k in ("proof_kib_root", "proof_kib_leaf", "proof_kib_by_path"):
+            v = meta.get(k)
+            if v is not None:
+                out[k] = v
+        return out
+
     workloads = [
         {"name":    w.get("name"),
          "mean_ns": (w.get("timing") or {}).get("mean_ns"),
          "p5_ns":   _p5(w),
-         "p95_ns":  (w.get("timing") or {}).get("p95_ns")}
+         "p95_ns":  (w.get("timing") or {}).get("p95_ns"),
+         **_proof(w)}
         for w in rec.get("workloads", [])
     ]
     shas = (rec.get("toolchain") or {}).get("git_shas") or {}

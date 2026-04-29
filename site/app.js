@@ -262,6 +262,10 @@ function rerenderIndexForCombo() {
   compare.innerHTML = "";
   renderCompare(compare, [...allWorkloads], machines);
 
+  const proofSizes = document.querySelector("#proof-size-grid");
+  proofSizes.innerHTML = "";
+  renderProofSizes(proofSizes, [...allWorkloads], machines);
+
   const scaling = document.querySelector("#scaling-grid");
   scaling.innerHTML = "";
   renderScaling(scaling, [...allWorkloads], machines);
@@ -398,6 +402,78 @@ function buildRecursionCard(treeName, machines) {
     });
   });
   return card;
+}
+
+// Proof-size section — one row per aggregate workload, showing root /
+// mid / leaf KiB. Deterministic per topology, so we read off any one
+// machine's run that recorded proof data. Older runs (pre-proof_kib) get
+// "—" filler.
+function renderProofSizes(container, workloadNames, machines) {
+  const aggWorkloads = workloadNames.filter((n) => n.startsWith("aggregate.")).sort();
+  if (!aggWorkloads.length) return;
+
+  const findProof = (workloadName) => {
+    for (const m of machines) {
+      for (const r of m.runs || []) {
+        const w = (r.workloads || []).find((x) => x.name === workloadName);
+        if (w && (w.proof_kib_root != null || w.proof_kib_by_path)) return w;
+      }
+    }
+    return null;
+  };
+
+  const rows = aggWorkloads.map((name) => {
+    const w = findProof(name);
+    if (!w) return { name, root: null, leaf: null, mids: [] };
+    const byPath = w.proof_kib_by_path || [];
+    // Group sizes by depth, average each tier (intra-tier sizes should match).
+    const byDepth = {};
+    for (const e of byPath) {
+      (byDepth[e.depth] = byDepth[e.depth] || []).push(e.kib);
+    }
+    const depths = Object.keys(byDepth).map(Number).sort((a, b) => a - b);
+    const avg = (xs) => Math.round(xs.reduce((a, b) => a + b, 0) / xs.length);
+    const root = w.proof_kib_root ?? (byDepth[0] ? avg(byDepth[0]) : null);
+    const leaf = w.proof_kib_leaf ?? (depths.length
+      ? avg(byDepth[depths[depths.length - 1]])
+      : null);
+    // Intermediate tiers: depths strictly between 0 and the deepest leaf.
+    const mids = depths.length > 2
+      ? depths.slice(1, -1).map((d) => ({ depth: d, kib: avg(byDepth[d]) }))
+      : [];
+    return { name, root, leaf, mids };
+  });
+
+  if (rows.every((r) => r.root == null && r.leaf == null)) {
+    container.appendChild(el("p", { class: "section-note",
+      text: "No proof-size data in this combo yet — re-run bench with the proof_kib-capturing runner to populate." }));
+    return;
+  }
+
+  const table = el("table", { class: "proof-size-table" });
+  const head = el("thead");
+  head.appendChild(el("tr", {},
+    el("th", { text: "workload" }),
+    el("th", { text: "leaf" }),
+    el("th", { text: "mid" }),
+    el("th", { text: "root (published)" }),
+  ));
+  table.appendChild(head);
+  const body = el("tbody");
+  for (const r of rows) {
+    const fmt = (k) => k == null ? "—" : `${k} KiB`;
+    const midText = r.mids.length
+      ? r.mids.map((m) => `${m.kib} KiB`).join(" · ")
+      : (r.leaf != null && r.root != null && r.leaf !== r.root ? "—" : "—");
+    body.appendChild(el("tr", {},
+      el("td", { class: "proof-size-name", text: r.name }),
+      el("td", { text: fmt(r.leaf) }),
+      el("td", { text: midText }),
+      el("td", { class: "proof-size-root", text: fmt(r.root) }),
+    ));
+  }
+  table.appendChild(body);
+  container.appendChild(table);
 }
 
 // Scaling section — for each workload, plot timing vs physical cores across
