@@ -22,10 +22,12 @@ postcard = { version = "1.1", features = ["alloc"] }
 # leanSig @ main as of 2026-04-23
 leansig = { git = "https://github.com/leanEthereum/leanSig.git", rev = "16c660e93c60240de113fdca6be7455d6d7721a1" }
 
-# leanMultisig @ main as of 2026-04-27
-xmss            = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "4593360d" }
-rec_aggregation = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "4593360d" }
-backend         = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "4593360d" }
+# leanMultisig @ main as of 2026-04-29 — PR #206 (52abd7f2) merged
+# the structured-benchmark API the runner uses to capture per-node
+# proof_kib without parsing stdout.
+xmss            = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "52abd7f2" }
+rec_aggregation = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "52abd7f2" }
+backend         = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "52abd7f2" }
 
 [profile.release]
 lto = "thin"
