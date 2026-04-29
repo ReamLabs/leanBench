@@ -121,9 +121,55 @@ async function renderIndex() {
   }
 
   const combos = indexData.combos || [];
-  activeCombo = combos[0] || null;
+  // Restore last-picked combo from URL (`?leansig=<sha>&leanmultisig=<sha>`)
+  // so a refresh keeps the user's selection. Falls back to most-recent combo
+  // when the URL has no params; *warns* (rather than silently falling back)
+  // when the URL had params but no combo matches — silent fallback can mask a
+  // stale link or a deleted combo.
+  const pick = comboFromUrl(combos);
+  if (pick.requested && !pick.found) {
+    showComboMissingWarning(pick.requested);
+  }
+  activeCombo = pick.found || combos[0] || null;
   renderComboFilter(combos);
   rerenderIndexForCombo();
+}
+
+function comboFromUrl(combos) {
+  const params = new URLSearchParams(location.search);
+  const ls = params.get("leansig");
+  const lm = params.get("leanmultisig");
+  if (!ls || !lm) return { requested: null, found: null };
+  const found = combos.find((c) =>
+    c.leansig_sha.startsWith(ls) && c.leanmultisig_sha.startsWith(lm)
+  ) || null;
+  return { requested: { leansig: ls, leanmultisig: lm }, found };
+}
+
+function showComboMissingWarning(requested) {
+  const filter = document.querySelector("#filter");
+  if (!filter || filter.querySelector(".combo-warning")) return;
+  const warn = el("div", { class: "combo-warning" },
+    `Requested combo (leansig ${requested.leansig} · leanmultisig ${requested.leanmultisig}) `
+    + `is not in the index — showing the most-recent combo instead. Pick another from the dropdown to update the URL.`,
+  );
+  filter.insertBefore(warn, filter.firstChild);
+}
+
+function syncComboToUrl(combo) {
+  const params = new URLSearchParams(location.search);
+  if (combo) {
+    // Short prefix is enough — full SHAs in URLs are noisy. We match by
+    // startsWith() above, so 8 chars is safely unique within a combo set.
+    params.set("leansig", shortSha(combo.leansig_sha));
+    params.set("leanmultisig", shortSha(combo.leanmultisig_sha));
+  } else {
+    params.delete("leansig");
+    params.delete("leanmultisig");
+  }
+  const search = params.toString();
+  const url = location.pathname + (search ? "?" + search : "") + location.hash;
+  history.replaceState(null, "", url);
 }
 
 function sameCombo(a, b) {
@@ -184,6 +230,9 @@ function renderComboFilter(combos) {
       updateLabel();
       for (const o of menu.querySelectorAll(".combo-option")) o.classList.remove("active");
       opt.classList.add("active");
+      syncComboToUrl(c);
+      // Picking a valid combo resolves the "not found" condition.
+      document.querySelector(".combo-warning")?.remove();
       rerenderIndexForCombo();
     });
     menu.appendChild(opt);

@@ -87,6 +87,17 @@ h2 {
 
 /* Version-combo filter (pill + dropdown) */
 #filter { margin-bottom: 24px; }
+.combo-warning {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #b4540022;
+  border: 1px solid #b45400;
+  color: var(--ink);
+  font-size: 13px;
+  font-family: var(--mono);
+  line-height: 1.45;
+}
 .combo-filter {
   position: relative;
   display: inline-block;
