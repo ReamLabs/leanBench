@@ -75,6 +75,15 @@ enum Cli {
     #[command(name = "aggregate-tree4-500",
               about = "Aggregation: 4-to-1 recursion over four 500-sig leaves at r=2")]
     AggregateTree4x500(CommonArgs),
+    #[command(name = "aggregate-tree8-125",
+              about = "Aggregation: 8-to-1 recursion over eight 125-sig leaves at r=2")]
+    AggregateTree8x125(CommonArgs),
+    #[command(name = "aggregate-tree8-250",
+              about = "Aggregation: 8-to-1 recursion over eight 250-sig leaves at r=2")]
+    AggregateTree8x250(CommonArgs),
+    #[command(name = "aggregate-tree8-500",
+              about = "Aggregation: 8-to-1 recursion over eight 500-sig leaves at r=2")]
+    AggregateTree8x500(CommonArgs),
 
     #[command(about = "Print version/provenance JSON and exit")]
     Provenance,
@@ -124,6 +133,9 @@ fn main() -> Result<()> {
         Cli::AggregateTree4x125(a) => workloads::aggregate::tree_4x125_r2(&a),
         Cli::AggregateTree4x250(a) => workloads::aggregate::tree_4x250_r2(&a),
         Cli::AggregateTree4x500(a) => workloads::aggregate::tree_4x500_r2(&a),
+        Cli::AggregateTree8x125(a) => workloads::aggregate::tree_8x125_r2(&a),
+        Cli::AggregateTree8x250(a) => workloads::aggregate::tree_8x250_r2(&a),
+        Cli::AggregateTree8x500(a) => workloads::aggregate::tree_8x500_r2(&a),
         Cli::Provenance => {
             let j = serde_json::json!({
                 "leansig_sha": LEANSIG_SHA,
