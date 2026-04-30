@@ -315,12 +315,12 @@ function renderCompare(container, workloadNames, machines) {
     section.appendChild(grid);
     if (group === "aggregate") {
       section.appendChild(el("p", { class: "compare-group-note" },
-        "Note: aggregate.tree timing = 2 × leaf + recursion. Recursion-only cost ≈ total − 2 × flat.",
+        "Note: aggregate.tree timing = N × leaf + recursion. Recursion-only time below is the root node's time_secs from the per-iteration benchmark report.",
       ));
       const treeWorkloads = grouped[group].filter((n) => /\.tree_\d+x\d+_r2$/.test(n));
       if (treeWorkloads.length) {
         section.appendChild(el("h4", { class: "compare-subgroup-head",
-          text: "recursion-only (derived)" }));
+          text: "recursion-only" }));
         const recurGrid = el("div", { class: "compare-group-grid" });
         for (const wl of treeWorkloads) {
           const card = buildRecursionCard(wl, machines);
@@ -343,24 +343,16 @@ function buildRecursionCard(treeName, machines) {
   const leafSize = parseInt(m[2], 10);
 
   const entries = [];
-  let usedDerivation = false;
   for (const [i, mach] of machines.entries()) {
-    const r = bestRecursionNs(mach, treeName, fanIn, leafSize);
-    if (r == null) continue;
-    if (r.source === "derived") usedDerivation = true;
-    entries.push({ label: mach.label, value: r.ns / 1e6, color: colorFor(i) });
+    const ns = recursionRootNs(mach, treeName);
+    if (ns == null) continue;
+    entries.push({ label: mach.label, value: ns / 1e6, color: colorFor(i) });
   }
   if (entries.length < 2) return null;
   entries.sort((a, b) => a.value - b.value);
 
   const card = el("div", { class: "compare-card" });
-  // Title reflects which way the number was obtained: direct read off the
-  // root node's `time_secs` when the runner recorded it, otherwise the
-  // legacy `tree − N × flat` derivation.
-  const title = usedDerivation
-    ? `tree_${fanIn}x${leafSize} recursion = total − ${fanIn} × flat_${leafSize}`
-    : `tree_${fanIn}x${leafSize} recursion (root node time)`;
-  card.appendChild(el("h3", { text: title }));
+  card.appendChild(el("h3", { text: `tree_${fanIn}x${leafSize} recursion` }));
   const wrap = el("div", { class: "compare-card-chart" });
   const canvas = el("canvas");
   wrap.appendChild(canvas);
@@ -512,7 +504,7 @@ function renderScaling(container, workloadNames, machines) {
       const treeWorkloads = grouped[group].filter((n) => /\.tree_\d+x\d+_r2$/.test(n));
       if (treeWorkloads.length) {
         section.appendChild(el("h4", { class: "compare-subgroup-head",
-          text: "recursion-only (derived)" }));
+          text: "recursion-only" }));
         // Pre-compute every recursion line's points so all charts in this
         // subgroup share a y-axis ceiling — at-a-glance comparison across
         // tree variants needs a common scale.
@@ -532,49 +524,30 @@ function renderScaling(container, workloadNames, machines) {
   }
 }
 
-// Returns the per-machine recursion-only cost in ns, plus a marker for
-// whether it came from the runner's direct `time_ns_root` measurement
-// (preferred) or the legacy `tree − N × flat` derivation (fallback for
-// older runs that pre-date the structured-benchmark API).
-function bestRecursionNs(machine, treeName, fanIn, leafSize) {
-  const flatName = `aggregate.flat_${leafSize}_r2`;
-  let bestDirect = null;
-  let bestTree = null;
-  let bestFlat = null;
+// Returns the best (smallest mean) recursion-only time in ns for a given
+// tree workload on a machine, read directly off the root node's `time_secs`
+// in the runner's per-iteration reports. Returns null when the machine has
+// no run with raw report data — older runs without `time_ns_root` simply
+// don't render in the recursion-only chart (no derivation fallback; the
+// derived form `tree − N × flat` double-counts per-call setup overhead and
+// gives a noisier, slightly biased number).
+function recursionRootNs(machine, treeName) {
+  let best = null;
   for (const r of machine.runs || []) {
-    const tree = (r.workloads || []).find((x) => x.name === treeName);
-    if (tree) {
-      if (tree.time_ns_root != null && (bestDirect == null || tree.time_ns_root < bestDirect)) {
-        bestDirect = tree.time_ns_root;
-      }
-      if (tree.mean_ns != null && (bestTree == null || tree.mean_ns < bestTree)) {
-        bestTree = tree.mean_ns;
-      }
-    }
-    const flat = (r.workloads || []).find((x) => x.name === flatName);
-    if (flat && flat.mean_ns != null && (bestFlat == null || flat.mean_ns < bestFlat)) {
-      bestFlat = flat.mean_ns;
+    const w = (r.workloads || []).find((x) => x.name === treeName);
+    if (w && w.time_ns_root != null && (best == null || w.time_ns_root < best)) {
+      best = w.time_ns_root;
     }
   }
-  if (bestDirect != null) return { ns: bestDirect, source: "direct" };
-  if (bestTree != null && bestFlat != null) {
-    const ns = bestTree - fanIn * bestFlat;
-    if (ns > 0) return { ns, source: "derived" };
-  }
-  return null;
+  return best;
 }
 
 function recursionScalingPoints(treeName, c4Machines) {
-  const m = treeName.match(/^aggregate\.tree_(\d+)x(\d+)_r2$/);
-  if (!m) return null;
-  const fanIn = parseInt(m[1], 10);
-  const leafSize = parseInt(m[2], 10);
-
   const points = [];
   for (const mach of c4Machines) {
-    const r = bestRecursionNs(mach, treeName, fanIn, leafSize);
-    if (r == null) continue;
-    points.push({ x: mach.logical_cores, y: r.ns / 1e6 });
+    const ns = recursionRootNs(mach, treeName);
+    if (ns == null) continue;
+    points.push({ x: mach.logical_cores, y: ns / 1e6 });
   }
   return points;
 }
@@ -585,9 +558,7 @@ function buildRecursionScalingCard(treeName, points, yMax) {
   const leafSize = parseInt(m[2], 10);
 
   const card = el("div", { class: "compare-card" });
-  card.appendChild(el("h3", {
-    text: `tree_${fanIn}x${leafSize} recursion = total − ${fanIn} × flat_${leafSize}`,
-  }));
+  card.appendChild(el("h3", { text: `tree_${fanIn}x${leafSize} recursion` }));
   const wrap = el("div", { class: "compare-card-chart" });
   const canvas = el("canvas");
   wrap.appendChild(canvas);
