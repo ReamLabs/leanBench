@@ -348,7 +348,7 @@ function buildRecursionCard(treeName, machines) {
     if (ns == null) continue;
     entries.push({ label: mach.label, value: ns / 1e6, color: colorFor(i) });
   }
-  if (entries.length < 2) return null;
+  if (entries.length === 0) return null;
   entries.sort((a, b) => a.value - b.value);
 
   const card = el("div", { class: "compare-card" });
