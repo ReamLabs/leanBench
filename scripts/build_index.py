@@ -100,16 +100,30 @@ def _summarize(rec: dict, filename: str) -> dict:
         s = sorted(samples)
         return int(s[max(0, int(len(s) * 0.05))])
 
-    def _proof(w: dict) -> dict:
-        # Surface root + leaf scalars (most analyses pluck these) plus the
-        # full per-path list when available. Older runs without proof data
-        # leave these unset.
+    def _proof_and_node_times(w: dict) -> dict:
+        # Surface root + leaf proof_kib scalars plus the per-path list
+        # (deterministic per topology). Also derive `time_ns_root` from the
+        # raw `reports` when present — the index renderer needs a flat
+        # scalar for the recursion-only chart, and we want it directly
+        # measured (not derived via tree − N × flat) when possible.
         meta = w.get("meta") or {}
         out = {}
         for k in ("proof_kib_root", "proof_kib_leaf", "proof_kib_by_path"):
             v = meta.get(k)
             if v is not None:
                 out[k] = v
+        reports = meta.get("reports") or []
+        if reports:
+            root_secs = []
+            for r in reports:
+                for n in r.get("nodes", []):
+                    if not n.get("path"):  # path == [] → root
+                        ts = (n.get("stats") or {}).get("time_secs")
+                        if ts is not None:
+                            root_secs.append(ts)
+                        break
+            if root_secs:
+                out["time_ns_root"] = int(sum(root_secs) / len(root_secs) * 1e9)
         return out
 
     workloads = [
@@ -117,7 +131,7 @@ def _summarize(rec: dict, filename: str) -> dict:
          "mean_ns": (w.get("timing") or {}).get("mean_ns"),
          "p5_ns":   _p5(w),
          "p95_ns":  (w.get("timing") or {}).get("p95_ns"),
-         **_proof(w)}
+         **_proof_and_node_times(w)}
         for w in rec.get("workloads", [])
     ]
     shas = (rec.get("toolchain") or {}).get("git_shas") or {}

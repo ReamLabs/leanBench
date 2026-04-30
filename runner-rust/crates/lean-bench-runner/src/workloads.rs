@@ -159,7 +159,7 @@ pub mod xmss_wl {
 pub mod aggregate {
     use super::*;
     use ::rec_aggregation::{
-        benchmark::run_aggregation_benchmark,
+        benchmark::{run_aggregation_benchmark, BenchmarkReport},
         AggregationTopology,
     };
 
@@ -174,16 +174,27 @@ pub mod aggregate {
         kib: usize,
     }
 
-    /// Run the timed sample loop and return (samples_ns, proof_sizes_per_node).
-    /// Proof sizes are deterministic for a given topology, so we capture them
-    /// once after the first timed sample and skip the bookkeeping after that.
+    /// Run the timed sample loop and return (samples_ns, proof_sizes_per_node, raw_reports).
+    ///
+    /// Proof sizes are deterministic for a given topology, so we surface them
+    /// once as a flat per-path list (for the index summary) — the same data
+    /// is also available inside `reports[i].nodes[j].stats.proof_kib` if
+    /// callers want it from the raw stream.
+    ///
+    /// The full `Vec<BenchmarkReport>` is also kept and dumped into the JSON
+    /// record so we never have to re-bench just to extract a metric we
+    /// happened not to surface — `time_secs`, `cycles`, `memory`,
+    /// `poseidons`, `dots`, `n_xmss` per node per iteration are all
+    /// recoverable from the result file.
+    ///
     /// `silent=true` suppresses leanMultisig's ANSI render so the only thing
     /// the runner prints is its own one-line JSON record.
     fn run_loop(args: &CommonArgs, topology: &AggregationTopology)
-        -> (Vec<u128>, Vec<ProofSizeEntry>)
+        -> (Vec<u128>, Vec<ProofSizeEntry>, Vec<BenchmarkReport>)
     {
         let mut samples = Vec::with_capacity(args.samples);
         let mut proof_sizes: Vec<ProofSizeEntry> = Vec::new();
+        let mut reports: Vec<BenchmarkReport> = Vec::with_capacity(args.samples);
         for i in 0..(args.samples + args.warmup) {
             let t = std::time::Instant::now();
             let report = run_aggregation_benchmark(topology, 0, false, true);
@@ -198,9 +209,10 @@ pub mod aggregate {
                         })
                         .collect();
                 }
+                reports.push(report);
             }
         }
-        (samples, proof_sizes)
+        (samples, proof_sizes, reports)
     }
 
     /// Pull out the root and (assumed-uniform) leaf proof sizes for the
@@ -221,7 +233,7 @@ pub mod aggregate {
     /// — we count only post-warmup samples.
     fn flat_n_r2(args: &CommonArgs, n: usize) -> Result<Record> {
         let topology = AggregationTopology { raw_xmss: n, children: vec![], log_inv_rate: 2 };
-        let (samples, proof_sizes) = run_loop(args, &topology);
+        let (samples, proof_sizes, reports) = run_loop(args, &topology);
         let (root_kib, leaf_kib) = root_and_leaf_kib(&proof_sizes);
         Ok(make_record(
             &format!("aggregate.flat_{n}_r2"),
@@ -234,6 +246,7 @@ pub mod aggregate {
                 "proof_kib_root": root_kib,
                 "proof_kib_leaf": leaf_kib,
                 "proof_kib_by_path": proof_sizes,
+                "reports": reports,
             }),
         ))
     }
@@ -253,7 +266,7 @@ pub mod aggregate {
             children: vec![leaf.clone(), leaf],
             log_inv_rate: 2,
         };
-        let (samples, proof_sizes) = run_loop(args, &topology);
+        let (samples, proof_sizes, reports) = run_loop(args, &topology);
         let (root_kib, leaf_kib) = root_and_leaf_kib(&proof_sizes);
         Ok(make_record(
             &format!("aggregate.tree_2x{n}_r2"),
@@ -267,7 +280,8 @@ pub mod aggregate {
                 "proof_kib_root": root_kib,
                 "proof_kib_leaf": leaf_kib,
                 "proof_kib_by_path": proof_sizes,
-                "note": format!("total wall time includes both leaves; subtract 2 × aggregate.flat_{n}_r2 for recursion-only cost"),
+                "reports": reports,
+                "note": format!("recursion-only time = root node `time_secs` from any report; or total - 2 × aggregate.flat_{n}_r2 as a fallback"),
             }),
         ))
     }
@@ -286,7 +300,7 @@ pub mod aggregate {
             children: vec![leaf.clone(), leaf.clone(), leaf.clone(), leaf],
             log_inv_rate: 2,
         };
-        let (samples, proof_sizes) = run_loop(args, &topology);
+        let (samples, proof_sizes, reports) = run_loop(args, &topology);
         let (root_kib, leaf_kib) = root_and_leaf_kib(&proof_sizes);
         Ok(make_record(
             &format!("aggregate.tree_4x{n}_r2"),
@@ -300,7 +314,8 @@ pub mod aggregate {
                 "proof_kib_root": root_kib,
                 "proof_kib_leaf": leaf_kib,
                 "proof_kib_by_path": proof_sizes,
-                "note": format!("total wall time includes all four leaves; subtract 4 × aggregate.flat_{n}_r2 for recursion-only cost"),
+                "reports": reports,
+                "note": format!("recursion-only time = root node `time_secs` from any report; or total - 4 × aggregate.flat_{n}_r2 as a fallback"),
             }),
         ))
     }
@@ -322,7 +337,7 @@ pub mod aggregate {
             ],
             log_inv_rate: 2,
         };
-        let (samples, proof_sizes) = run_loop(args, &topology);
+        let (samples, proof_sizes, reports) = run_loop(args, &topology);
         let (root_kib, leaf_kib) = root_and_leaf_kib(&proof_sizes);
         Ok(make_record(
             &format!("aggregate.tree_8x{n}_r2"),
@@ -336,7 +351,8 @@ pub mod aggregate {
                 "proof_kib_root": root_kib,
                 "proof_kib_leaf": leaf_kib,
                 "proof_kib_by_path": proof_sizes,
-                "note": format!("total wall time includes all eight leaves; subtract 8 × aggregate.flat_{n}_r2 for recursion-only cost"),
+                "reports": reports,
+                "note": format!("recursion-only time = root node `time_secs` from any report; or total - 8 × aggregate.flat_{n}_r2 as a fallback"),
             }),
         ))
     }

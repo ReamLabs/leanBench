@@ -341,33 +341,26 @@ function buildRecursionCard(treeName, machines) {
   if (!m) return null;
   const fanIn = parseInt(m[1], 10);
   const leafSize = parseInt(m[2], 10);
-  const flatName = `aggregate.flat_${leafSize}_r2`;
-
-  const bestMean = (machine, name) => {
-    let best = null;
-    for (const r of machine.runs || []) {
-      const w = (r.workloads || []).find((x) => x.name === name);
-      if (w && w.mean_ns != null && (best == null || w.mean_ns < best)) best = w.mean_ns;
-    }
-    return best;
-  };
 
   const entries = [];
+  let usedDerivation = false;
   for (const [i, mach] of machines.entries()) {
-    const tree = bestMean(mach, treeName);
-    const flat = bestMean(mach, flatName);
-    if (tree == null || flat == null) continue;
-    const recursionNs = tree - fanIn * flat;
-    if (recursionNs <= 0) continue; // negative means the inputs are inconsistent — skip
-    entries.push({ label: mach.label, value: recursionNs / 1e6, color: colorFor(i) });
+    const r = bestRecursionNs(mach, treeName, fanIn, leafSize);
+    if (r == null) continue;
+    if (r.source === "derived") usedDerivation = true;
+    entries.push({ label: mach.label, value: r.ns / 1e6, color: colorFor(i) });
   }
   if (entries.length < 2) return null;
   entries.sort((a, b) => a.value - b.value);
 
   const card = el("div", { class: "compare-card" });
-  card.appendChild(el("h3", {
-    text: `tree_${fanIn}x${leafSize} recursion = total − ${fanIn} × flat_${leafSize}`,
-  }));
+  // Title reflects which way the number was obtained: direct read off the
+  // root node's `time_secs` when the runner recorded it, otherwise the
+  // legacy `tree − N × flat` derivation.
+  const title = usedDerivation
+    ? `tree_${fanIn}x${leafSize} recursion = total − ${fanIn} × flat_${leafSize}`
+    : `tree_${fanIn}x${leafSize} recursion (root node time)`;
+  card.appendChild(el("h3", { text: title }));
   const wrap = el("div", { class: "compare-card-chart" });
   const canvas = el("canvas");
   wrap.appendChild(canvas);
@@ -539,30 +532,49 @@ function renderScaling(container, workloadNames, machines) {
   }
 }
 
+// Returns the per-machine recursion-only cost in ns, plus a marker for
+// whether it came from the runner's direct `time_ns_root` measurement
+// (preferred) or the legacy `tree − N × flat` derivation (fallback for
+// older runs that pre-date the structured-benchmark API).
+function bestRecursionNs(machine, treeName, fanIn, leafSize) {
+  const flatName = `aggregate.flat_${leafSize}_r2`;
+  let bestDirect = null;
+  let bestTree = null;
+  let bestFlat = null;
+  for (const r of machine.runs || []) {
+    const tree = (r.workloads || []).find((x) => x.name === treeName);
+    if (tree) {
+      if (tree.time_ns_root != null && (bestDirect == null || tree.time_ns_root < bestDirect)) {
+        bestDirect = tree.time_ns_root;
+      }
+      if (tree.mean_ns != null && (bestTree == null || tree.mean_ns < bestTree)) {
+        bestTree = tree.mean_ns;
+      }
+    }
+    const flat = (r.workloads || []).find((x) => x.name === flatName);
+    if (flat && flat.mean_ns != null && (bestFlat == null || flat.mean_ns < bestFlat)) {
+      bestFlat = flat.mean_ns;
+    }
+  }
+  if (bestDirect != null) return { ns: bestDirect, source: "direct" };
+  if (bestTree != null && bestFlat != null) {
+    const ns = bestTree - fanIn * bestFlat;
+    if (ns > 0) return { ns, source: "derived" };
+  }
+  return null;
+}
+
 function recursionScalingPoints(treeName, c4Machines) {
   const m = treeName.match(/^aggregate\.tree_(\d+)x(\d+)_r2$/);
   if (!m) return null;
   const fanIn = parseInt(m[1], 10);
   const leafSize = parseInt(m[2], 10);
-  const flatName = `aggregate.flat_${leafSize}_r2`;
-
-  const bestMean = (machine, name) => {
-    let best = null;
-    for (const r of machine.runs || []) {
-      const w = (r.workloads || []).find((x) => x.name === name);
-      if (w && w.mean_ns != null && (best == null || w.mean_ns < best)) best = w.mean_ns;
-    }
-    return best;
-  };
 
   const points = [];
   for (const mach of c4Machines) {
-    const tree = bestMean(mach, treeName);
-    const flat = bestMean(mach, flatName);
-    if (tree == null || flat == null) continue;
-    const recursionNs = tree - fanIn * flat;
-    if (recursionNs <= 0) continue;
-    points.push({ x: mach.logical_cores, y: recursionNs / 1e6 });
+    const r = bestRecursionNs(mach, treeName, fanIn, leafSize);
+    if (r == null) continue;
+    points.push({ x: mach.logical_cores, y: r.ns / 1e6 });
   }
   return points;
 }
