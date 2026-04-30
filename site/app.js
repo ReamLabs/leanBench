@@ -328,14 +328,12 @@ function renderCompare(container, workloadNames, machines) {
         }
         section.appendChild(recurGrid);
 
-        // Single-chart view of recursion-only time across the full
-        // (fan-in × leaf-size) grid, one line per machine.
-        const shapeCard = buildRecursionByTopologyCard(treeWorkloads, machines);
-        if (shapeCard) {
-          section.appendChild(el("h4", { class: "compare-subgroup-head",
-            text: "recursion-only by topology" }));
-          section.appendChild(shapeCard);
-        }
+        // Two complementary cross-section views of the (fan-in × leaf-size)
+        // grid: one fixes leaf size and varies fan-in, the other fixes
+        // fan-in and varies leaf size. Each card shows machines as separate
+        // lines so cross-CPU shape differences are visible at a glance.
+        appendRecursionCrossSection(section, treeWorkloads, machines, "fanIn");
+        appendRecursionCrossSection(section, treeWorkloads, machines, "leafSize");
       }
     }
     container.appendChild(section);
@@ -398,74 +396,107 @@ function buildRecursionCard(treeName, machines) {
   return card;
 }
 
-// One chart, one line per machine, x-axis walks the full (fan-in × leaf-size)
-// grid sorted by fan-in then leaf-size — gives a single view of how the
-// recursion proof's wall time bends with topology shape across CPUs.
-// Recursion time is largely fan-in-driven and only weakly leaf-size-driven,
-// so the line shapes also visualise that asymmetry.
-function buildRecursionByTopologyCard(treeWorkloads, machines) {
+// Cross-section views of the (fan-in × leaf-size) grid. `varies` picks
+// which axis is the chart's x-axis; the other axis becomes the slicer
+// (one card per fixed value of it).
+//
+//   varies="fanIn"    → cards = leaf sizes; each card plots fan-in vs time
+//   varies="leafSize" → cards = fan-ins; each card plots leaf size vs time
+//
+// Both produce small line charts with one line per machine.
+function appendRecursionCrossSection(section, treeWorkloads, machines, varies) {
   const parsed = treeWorkloads
     .map((name) => {
       const m = name.match(/^aggregate\.tree_(\d+)x(\d+)_r2$/);
       if (!m) return null;
       return { name, fanIn: parseInt(m[1], 10), leafSize: parseInt(m[2], 10) };
     })
-    .filter(Boolean)
-    .sort((a, b) => a.fanIn - b.fanIn || a.leafSize - b.leafSize);
-  if (parsed.length < 2) return null;
+    .filter(Boolean);
+  if (!parsed.length) return;
 
-  const labels = parsed.map((p) => `${p.fanIn}×${p.leafSize}`);
-  const datasets = [];
-  machines.forEach((mach, i) => {
-    const data = parsed.map((p) => {
-      const ns = recursionRootNs(mach, p.name);
-      return ns != null ? ns / 1e6 : null;
+  const slicerKey   = varies === "fanIn" ? "leafSize" : "fanIn";
+  const slicerLabel = varies === "fanIn" ? "leaf size" : "fan-in";
+  const xLabel      = varies === "fanIn" ? "recursion fan-in" : "leaf size (raw XMSS sigs)";
+  const headingText = varies === "fanIn"
+    ? "recursion vs fan-in (per leaf size)"
+    : "recursion vs leaf size (per fan-in)";
+
+  const slicerValues = [...new Set(parsed.map((p) => p[slicerKey]))].sort((a, b) => a - b);
+  if (!slicerValues.length) return;
+
+  const grid = el("div", { class: "compare-group-grid" });
+  let added = 0;
+  for (const sv of slicerValues) {
+    const row = parsed.filter((p) => p[slicerKey] === sv).sort((a, b) => a[varies] - b[varies]);
+    if (row.length < 2) continue; // need at least two x-points for a line
+
+    const datasets = [];
+    machines.forEach((mach, i) => {
+      const data = row.map((p) => {
+        const ns = recursionRootNs(mach, p.name);
+        return ns != null ? { x: p[varies], y: ns / 1e6 } : null;
+      }).filter(Boolean);
+      if (data.length < 2) return;
+      datasets.push({
+        label: mach.label,
+        data,
+        borderColor: colorFor(i),
+        backgroundColor: colorFor(i) + "22",
+        tension: 0.15,
+        fill: false,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      });
     });
-    if (data.every((v) => v == null)) return;
-    datasets.push({
-      label: mach.label,
-      data,
-      borderColor: colorFor(i),
-      backgroundColor: colorFor(i) + "22",
-      tension: 0.15,
-      fill: false,
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      spanGaps: true,
-    });
-  });
-  if (!datasets.length) return null;
+    if (!datasets.length) continue;
 
-  const card = el("div", { class: "compare-card compare-card-wide" });
-  const wrap = el("div", { class: "compare-card-chart compare-card-chart-tall" });
-  const canvas = el("canvas");
-  wrap.appendChild(canvas);
-  card.appendChild(wrap);
+    const xValues = row.map((p) => p[varies]);
+    const card = el("div", { class: "compare-card" });
+    card.appendChild(el("h3", { text: `${slicerLabel} = ${sv}` }));
+    const wrap = el("div", { class: "compare-card-chart" });
+    const canvas = el("canvas");
+    wrap.appendChild(canvas);
+    card.appendChild(wrap);
+    grid.appendChild(card);
+    added++;
 
-  queueMicrotask(() => {
-    new Chart(canvas.getContext("2d"), {
-      type: "line",
-      data: { labels, datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: "right", labels: { boxWidth: 12, font: { size: 11 } } },
-          tooltip: {
-            callbacks: {
-              title: (items) => `tree_${items[0].label} (fan-in × leaf size)`,
-              label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(0)} ms`,
+    queueMicrotask(() => {
+      new Chart(canvas.getContext("2d"), {
+        type: "line",
+        data: { datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: (items) => `${xLabel}: ${items[0].parsed.x}`,
+                label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(0)} ms`,
+              },
             },
           },
+          scales: {
+            x: {
+              type: "logarithmic",
+              title: { display: true, text: xLabel },
+              min: xValues[0],
+              max: xValues[xValues.length - 1],
+              afterBuildTicks: (axis) => {
+                axis.ticks = xValues.map((v) => ({ value: v }));
+              },
+              ticks: { callback: (v) => v },
+            },
+            y: { title: { display: true, text: "recursion-only ms (mean)" }, beginAtZero: true },
+          },
         },
-        scales: {
-          x: { title: { display: true, text: "fan-in × leaf size" } },
-          y: { title: { display: true, text: "recursion-only ms (mean)" }, beginAtZero: true },
-        },
-      },
+      });
     });
-  });
-  return card;
+  }
+  if (added) {
+    section.appendChild(el("h4", { class: "compare-subgroup-head", text: headingText }));
+    section.appendChild(grid);
+  }
 }
 
 // Proof-size section — one row per aggregate workload, showing root /

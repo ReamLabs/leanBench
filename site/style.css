@@ -247,8 +247,6 @@ h2 {
   font-weight: 600;
   font-family: var(--mono);
 }
-.compare-card-wide { margin-top: 0; }
-.compare-card-chart-tall { height: 320px; }
 .compare-group-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
