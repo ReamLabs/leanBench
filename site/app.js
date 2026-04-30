@@ -424,12 +424,14 @@ function appendRecursionCrossSection(section, treeWorkloads, machines, varies) {
   const slicerValues = [...new Set(parsed.map((p) => p[slicerKey]))].sort((a, b) => a - b);
   if (!slicerValues.length) return;
 
-  const grid = el("div", { class: "compare-group-grid" });
-  let added = 0;
+  // First pass: build per-slicer datasets so we can share a y-axis ceiling
+  // across the subgroup. With independent y-axes a small fan-in card and a
+  // large fan-in card both look "flat" because each auto-zooms to its own
+  // range — losing the absolute-magnitude story between cards.
+  const built = [];
   for (const sv of slicerValues) {
     const row = parsed.filter((p) => p[slicerKey] === sv).sort((a, b) => a[varies] - b[varies]);
-    if (row.length < 2) continue; // need at least two x-points for a line
-
+    if (row.length < 2) continue;
     const datasets = [];
     machines.forEach((mach, i) => {
       const data = row.map((p) => {
@@ -449,21 +451,29 @@ function appendRecursionCrossSection(section, treeWorkloads, machines, varies) {
       });
     });
     if (!datasets.length) continue;
+    built.push({ sv, row, datasets });
+  }
+  if (!built.length) return;
 
-    const xValues = row.map((p) => p[varies]);
+  const yMax = niceCeil(Math.max(
+    ...built.flatMap((b) => b.datasets.flatMap((ds) => ds.data.map((p) => p.y))),
+  ));
+
+  const grid = el("div", { class: "compare-group-grid" });
+  for (const b of built) {
+    const xValues = b.row.map((p) => p[varies]);
     const card = el("div", { class: "compare-card" });
-    card.appendChild(el("h3", { text: `${slicerLabel} = ${sv}` }));
+    card.appendChild(el("h3", { text: `${slicerLabel} = ${b.sv}` }));
     const wrap = el("div", { class: "compare-card-chart" });
     const canvas = el("canvas");
     wrap.appendChild(canvas);
     card.appendChild(wrap);
     grid.appendChild(card);
-    added++;
 
     queueMicrotask(() => {
       new Chart(canvas.getContext("2d"), {
         type: "line",
-        data: { datasets },
+        data: { datasets: b.datasets },
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -487,16 +497,18 @@ function appendRecursionCrossSection(section, treeWorkloads, machines, varies) {
               },
               ticks: { callback: (v) => v },
             },
-            y: { title: { display: true, text: "recursion-only ms (mean)" }, beginAtZero: true },
+            y: {
+              title: { display: true, text: "recursion-only ms (mean)" },
+              beginAtZero: true,
+              max: yMax,
+            },
           },
         },
       });
     });
   }
-  if (added) {
-    section.appendChild(el("h4", { class: "compare-subgroup-head", text: headingText }));
-    section.appendChild(grid);
-  }
+  section.appendChild(el("h4", { class: "compare-subgroup-head", text: headingText }));
+  section.appendChild(grid);
 }
 
 // Proof-size section — one row per aggregate workload, showing root /
