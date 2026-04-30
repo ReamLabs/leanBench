@@ -417,9 +417,11 @@ function appendRecursionCrossSection(section, treeWorkloads, machines, varies) {
   const slicerKey   = varies === "fanIn" ? "leafSize" : "fanIn";
   const slicerLabel = varies === "fanIn" ? "leaf size" : "fan-in";
   const xLabel      = varies === "fanIn" ? "recursion fan-in" : "leaf size (raw XMSS sigs)";
+  // Heading describes the chart axes; each card's own title (e.g.
+  // "leaf size = 125") names the dimension being held fixed.
   const headingText = varies === "fanIn"
-    ? "recursion vs fan-in (per leaf size)"
-    : "recursion vs leaf size (per fan-in)";
+    ? "recursion-only time vs fan-in size"
+    : "recursion-only time vs leaf size";
 
   const slicerValues = [...new Set(parsed.map((p) => p[slicerKey]))].sort((a, b) => a - b);
   if (!slicerValues.length) return;
