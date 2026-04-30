@@ -33,10 +33,19 @@ RESULTS = ROOT / "results"
 
 def build_index_bytes() -> bytes:
     """Return the current index as JSON bytes (regenerated on every call so
-    it always reflects what's on disk)."""
-    from scripts.build_index import build_index
+    it always reflects what's on disk).
 
-    return (json.dumps(build_index(RESULTS), indent=2) + "\n").encode("utf-8")
+    Reloads `scripts.build_index` on every request so edits to that module
+    take effect without restarting the dev server. The first import is the
+    only one that triggers Python's module cache; without reload we'd serve
+    stale `build_index` logic for the lifetime of the dev server process,
+    which has bitten us several times when adding new index fields.
+    """
+    import importlib
+
+    import scripts.build_index as _build_index_module
+    importlib.reload(_build_index_module)
+    return (json.dumps(_build_index_module.build_index(RESULTS), indent=2) + "\n").encode("utf-8")
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
