@@ -229,7 +229,8 @@ function enumerateTopologies(totalSigs, maxFanIn) {
 
 function evaluateTopology(t, model) {
   const leafWall = model.flat.predict(t.leafSize);
-  const recWall = t.tiers.reduce((acc, n) => acc + (model.rec.predict(n) ?? 0), 0);
+  const recPerTier = t.tiers.map((n) => model.rec.predict(n) ?? 0);
+  const recWall = recPerTier.reduce((acc, ms) => acc + ms, 0);
   const totalWall = leafWall + recWall;
   const machines = t.tiers.reduce((acc, n) => acc * n, 1);
   const rootProof = t.tiers.length ? model.proof.predict(t.tiers[0]) : null;
@@ -238,7 +239,7 @@ function evaluateTopology(t, model) {
   return {
     tiers: t.tiers,
     leafSize: t.leafSize,
-    leafWall, recWall, totalWall, machines, rootProof,
+    leafWall, recWall, recPerTier, totalWall, machines, rootProof,
     extrapolatesRec, extrapolatesFlat,
     label: `${t.tiers.join("×")}×${t.leafSize}`,
   };
@@ -303,10 +304,19 @@ function renderResults(rows, model, totalSigs, leafBudgetMs) {
     const notes = [];
     if (r.extrapolatesRec) notes.push("rec extrapolated");
     if (r.extrapolatesFlat) notes.push("leaf extrapolated");
+    // Per-tier breakdown of recursion wall — root tier first to match the
+    // topology label (which reads root → leaves left-to-right).
+    const recCell = el("td", {},
+      el("div", { class: "topo-rec-total", text: fmtMs(r.recWall) }),
+      r.recPerTier.length > 1
+        ? el("div", { class: "topo-rec-break",
+            text: r.recPerTier.map((ms) => fmtMsCompact(ms)).join(" + ") })
+        : null,
+    );
     body.appendChild(el("tr", { class: notes.length ? "topo-extrapolated" : "" },
       el("td", { class: "topo-name", text: r.label }),
       el("td", { text: fmtMs(r.leafWall) }),
-      el("td", { text: fmtMs(r.recWall) }),
+      recCell,
       el("td", { class: "topo-total", text: fmtMs(r.totalWall) }),
       el("td", { text: String(r.machines) }),
       el("td", { text: r.rootProof != null ? `${Math.round(r.rootProof)} KiB` : "—" }),
@@ -326,4 +336,13 @@ function fmtMs(ms) {
   if (ms == null) return "—";
   if (ms < 1000) return `${ms.toFixed(0)} ms`;
   return `${(ms / 1000).toFixed(2)} s`;
+}
+
+// Compact form for inside-cell breakdowns: drops the unit on intermediate
+// terms so "0.92 + 0.92 + 0.92 s" doesn't repeat itself, and uses fewer
+// decimals when the tier count is high so wide trees stay readable.
+function fmtMsCompact(ms) {
+  if (ms == null) return "—";
+  if (ms < 1000) return `${ms.toFixed(0)}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
 }

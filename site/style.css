@@ -270,6 +270,7 @@ h2 {
 }
 .topo-results-table td.topo-total { font-weight: 600; color: var(--ink); }
 .topo-results-table td.topo-notes { color: #b45400; font-size: 12px; }
+.topo-rec-break { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
 .topo-results-table tr.topo-extrapolated td.topo-name { font-style: italic; }
 .topology-link {
   display: inline-block;
