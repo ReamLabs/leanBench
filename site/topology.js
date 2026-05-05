@@ -4,9 +4,9 @@
 // index data, and rank them.
 //
 // Cost model (per machine, derived from the active combo's measurements):
-//   flat(M)     ≈ a + b·M       — leaf cost, linear in raw_xmss per leaf
-//   r(N)        ≈ a' + b'·N     — recursion-only cost, linear in fan-in
-//   proof(N)    ≈ a'' + b''·N   — root proof size, linear in fan-in
+//   flat(M)        ≈ a + b·M    — leaf cost, linear in raw_xmss per leaf
+//   recursion(N)   ≈ a' + b'·N  — recursion-only cost, linear in fan-in
+//   proof_size(N)  ≈ a'' + b''·N — root proof size, linear in fan-in
 //
 // Reuses helpers (`el`, `colorFor`, `shortSha`, `fmtRelative`) from app.js
 // which loads first.
@@ -319,9 +319,9 @@ function renderCostModel(model) {
   const grid = document.querySelector("#topo-cost-grid");
   grid.innerHTML = "";
   const rows = [
-    { label: "flat(M)",   fit: model.flat,  unit: "ms" },
-    { label: "r(N)",      fit: model.rec,   unit: "ms" },
-    { label: "proof(N)",  fit: model.proof, unit: "KiB" },
+    { label: "flat(M)",        fit: model.flat,  unit: "ms" },
+    { label: "recursion(N)",   fit: model.rec,   unit: "ms" },
+    { label: "proof_size(N)",  fit: model.proof, unit: "KiB" },
   ];
   const table = el("table", { class: "topo-cost-table" });
   const head = el("thead");
