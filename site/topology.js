@@ -13,97 +13,162 @@
 
 if (document.body.dataset.page === "topology") renderTopologyPage();
 
+let topoIndexData = null;
+let topoActiveCombo = null;
+let topoMachines = []; // filtered to active combo
+
 async function renderTopologyPage() {
-  let indexData;
   try {
-    indexData = await fetch("results/index.json").then((r) => r.json());
+    topoIndexData = await fetch("results/index.json").then((r) => r.json());
   } catch (e) {
     document.querySelector("#topology-results").innerHTML =
       "<p>No results yet — run a sweep first.</p>";
     return;
   }
 
-  const combos = indexData.combos || [];
+  const combos = topoIndexData.combos || [];
   const params = new URLSearchParams(location.search);
   const ls = params.get("leansig");
   const lm = params.get("leanmultisig");
-  const activeCombo = (ls && lm
+  topoActiveCombo = (ls && lm
     ? combos.find((c) => c.leansig_sha.startsWith(ls) && c.leanmultisig_sha.startsWith(lm))
     : null) || combos[0];
 
-  if (!activeCombo) {
+  if (!topoActiveCombo) {
     document.querySelector("#topology-results").innerHTML =
       "<p>No combos in the index.</p>";
     return;
   }
 
-  // Filter to machines that have aggregate workload data on this combo.
-  const machines = (indexData.machines || [])
+  setupComboFilter(combos);
+  setupInputHandlers();
+  applyActiveCombo();
+}
+
+// Filter machines to those with aggregate-workload data on the active combo.
+function deriveMachinesForCombo(combo) {
+  return (topoIndexData.machines || [])
     .map((m) => ({
       ...m,
       runs: (m.runs || []).filter((r) =>
-        r.git_shas?.leansig_sha === activeCombo.leansig_sha
-        && r.git_shas?.leanmultisig_sha === activeCombo.leanmultisig_sha
+        r.git_shas?.leansig_sha === combo.leansig_sha
+        && r.git_shas?.leanmultisig_sha === combo.leanmultisig_sha
         && (r.workloads || []).some((w) => w.name.startsWith("aggregate."))),
     }))
-    .filter((m) => m.runs.length > 0);
+    .filter((m) => m.runs.length > 0)
+    .sort((a, b) =>
+      (b.logical_cores || 0) - (a.logical_cores || 0)
+      || (a.label || "").localeCompare(b.label || ""));
+}
 
-  if (!machines.length) {
-    document.querySelector("#topology-results").innerHTML =
-      `<p>No aggregate-workload data in the active combo (leansig ${shortSha(activeCombo.leansig_sha)} · leanmultisig ${shortSha(activeCombo.leanmultisig_sha)}).</p>`;
+// Render the combo-filter dropdown using the same details/menu pattern as
+// the index page. Picking a combo refits the cost model + repopulates the
+// machine dropdown without reloading the page.
+function setupComboFilter(combos) {
+  const details = document.querySelector("#combo-filter");
+  const label   = details.querySelector(".combo-label");
+  const menu    = document.querySelector("#combo-menu");
+
+  document.addEventListener("click", (e) => {
+    if (details.open && !details.contains(e.target)) details.open = false;
+  });
+
+  if (!combos.length) {
+    label.textContent = "no runs yet";
+    details.style.pointerEvents = "none";
     return;
   }
 
-  const machineSelect = document.querySelector("#topo-machine");
-  // Default to the largest machine (most logical cores), since "what should I
-  // provision" usually maps to "the fastest box I have". Fall back to first
-  // by label if logical_cores is missing somewhere.
-  const sorted = [...machines].sort((a, b) =>
-    (b.logical_cores || 0) - (a.logical_cores || 0)
-    || (a.label || "").localeCompare(b.label || ""));
-  for (const m of sorted) {
-    const opt = el("option", { value: m.fingerprint }, m.label || m.fingerprint);
-    machineSelect.appendChild(opt);
-  }
-
-  const totalSigsInput = document.querySelector("#topo-total-sigs");
-  const leafBudgetInput = document.querySelector("#topo-leaf-budget");
-  const maxFanInSelect = document.querySelector("#topo-max-fanin");
-  const sortSelect = document.querySelector("#topo-sort");
-
-  // Show which combo we're modelling against (sub-heading on the form).
-  const formSection = document.querySelector("#topology-form");
-  formSection.insertBefore(el("p", { class: "section-note" },
-    `Active combo: leansig ${shortSha(activeCombo.leansig_sha)} · leanmultisig ${shortSha(activeCombo.leanmultisig_sha)} · `,
-    el("a", { href: `index.html?leansig=${shortSha(activeCombo.leansig_sha)}&leanmultisig=${shortSha(activeCombo.leanmultisig_sha)}` },
-      "view raw measurements"),
-  ), formSection.firstChild);
-
-  const recompute = () => {
-    const machine = machines.find((m) => m.fingerprint === machineSelect.value)
-      || sorted[0];
-    const totalSigs = parseInt(totalSigsInput.value, 10);
-    const leafBudgetMs = parseFloat(leafBudgetInput.value);
-    const maxFanIn = parseInt(maxFanInSelect.value, 10);
-    const sortBy = sortSelect.value;
-    if (!Number.isFinite(totalSigs) || totalSigs < 2) return;
-
-    const model = fitCostModel(machine);
-    renderCostModel(model);
-    const candidates = enumerateTopologies(totalSigs, maxFanIn);
-    const evaluated = candidates
-      .map((t) => evaluateTopology(t, model))
-      .filter((r) => r.leafWall <= leafBudgetMs);
-    evaluated.sort((a, b) => (a[sortBy] - b[sortBy]) || (a.machines - b.machines));
-    renderResults(evaluated, model, totalSigs, leafBudgetMs);
+  const updateLabel = () => {
+    label.textContent = comboShortLabel(topoActiveCombo);
+    details.title = `leansig ${topoActiveCombo.leansig_sha} · leanmultisig ${topoActiveCombo.leanmultisig_sha}`;
   };
+  updateLabel();
 
-  machineSelect.value = sorted[0].fingerprint;
+  for (const c of combos) {
+    const active = c.leansig_sha === topoActiveCombo.leansig_sha
+                && c.leanmultisig_sha === topoActiveCombo.leanmultisig_sha;
+    const opt = el("div", {
+      class: `combo-option${active ? " active" : ""}`,
+      title: `leansig ${c.leansig_sha}\nleanmultisig ${c.leanmultisig_sha}`,
+    },
+      el("div", { class: "combo-option-shas",
+        text: `leansig ${shortSha(c.leansig_sha)} · leanmultisig ${shortSha(c.leanmultisig_sha)}` }),
+      el("div", { class: "combo-option-meta",
+        text: `${fmtRelative(c.latest_run_ts)} · ${c.run_count} run${c.run_count === 1 ? "" : "s"}` }),
+    );
+    opt.addEventListener("click", () => {
+      topoActiveCombo = c;
+      details.open = false;
+      updateLabel();
+      for (const o of menu.querySelectorAll(".combo-option")) o.classList.remove("active");
+      opt.classList.add("active");
+      // Persist the selection in the URL so refresh keeps the same combo.
+      const params = new URLSearchParams(location.search);
+      params.set("leansig", shortSha(c.leansig_sha));
+      params.set("leanmultisig", shortSha(c.leanmultisig_sha));
+      history.replaceState(null, "", location.pathname + "?" + params.toString());
+      applyActiveCombo();
+    });
+    menu.appendChild(opt);
+  }
+}
+
+function setupInputHandlers() {
+  const machineSelect   = document.querySelector("#topo-machine");
+  const totalSigsInput  = document.querySelector("#topo-total-sigs");
+  const leafBudgetInput = document.querySelector("#topo-leaf-budget");
+  const maxFanInSelect  = document.querySelector("#topo-max-fanin");
+  const sortSelect      = document.querySelector("#topo-sort");
   for (const input of [machineSelect, totalSigsInput, leafBudgetInput, maxFanInSelect, sortSelect]) {
     input.addEventListener("change", recompute);
     input.addEventListener("input", recompute);
   }
+}
+
+// Re-derive machines for the active combo, repopulate the machine dropdown
+// (preserving the previous selection if the same machine still has data),
+// and trigger a recompute. Called both on initial load and on combo change.
+function applyActiveCombo() {
+  topoMachines = deriveMachinesForCombo(topoActiveCombo);
+  const machineSelect = document.querySelector("#topo-machine");
+  const prev = machineSelect.value;
+  machineSelect.innerHTML = "";
+  if (!topoMachines.length) {
+    document.querySelector("#topology-results").innerHTML =
+      `<p>No aggregate-workload data in this combo (leansig ${shortSha(topoActiveCombo.leansig_sha)} · leanmultisig ${shortSha(topoActiveCombo.leanmultisig_sha)}).</p>`;
+    document.querySelector("#topo-cost-grid").innerHTML = "";
+    return;
+  }
+  for (const m of topoMachines) {
+    machineSelect.appendChild(el("option", { value: m.fingerprint }, m.label || m.fingerprint));
+  }
+  if (prev && topoMachines.find((m) => m.fingerprint === prev)) {
+    machineSelect.value = prev;
+  } else {
+    machineSelect.value = topoMachines[0].fingerprint;
+  }
   recompute();
+}
+
+function recompute() {
+  const machine = topoMachines.find((m) => m.fingerprint
+    === document.querySelector("#topo-machine").value) || topoMachines[0];
+  if (!machine) return;
+  const totalSigs    = parseInt(document.querySelector("#topo-total-sigs").value, 10);
+  const leafBudgetMs = parseFloat(document.querySelector("#topo-leaf-budget").value);
+  const maxFanIn     = parseInt(document.querySelector("#topo-max-fanin").value, 10);
+  const sortBy       = document.querySelector("#topo-sort").value;
+  if (!Number.isFinite(totalSigs) || totalSigs < 2) return;
+
+  const model = fitCostModel(machine);
+  renderCostModel(model);
+  const candidates = enumerateTopologies(totalSigs, maxFanIn);
+  const evaluated = candidates
+    .map((t) => evaluateTopology(t, model))
+    .filter((r) => r.leafWall <= leafBudgetMs);
+  evaluated.sort((a, b) => (a[sortBy] - b[sortBy]) || (a.machines - b.machines));
+  renderResults(evaluated, model, totalSigs, leafBudgetMs);
 }
 
 // ---------- cost model -----------------------------------------------------
