@@ -1177,4 +1177,5 @@ function renderWorkload(w, idx) {
 
 if (page === "run") renderRun();
 else if (page === "topology") { /* handled by topology.js */ }
+else if (page === "trend") { /* handled by trend.js */ }
 else renderIndex();

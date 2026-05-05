@@ -322,6 +322,58 @@ h2 {
 }
 .nav-link:hover { border-color: var(--accent); }
 
+/* Trend page */
+.trend-machine-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.trend-machine-label select {
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 4px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.trend-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.trend-table th,
+.trend-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.trend-table th {
+  font-weight: 600;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+.trend-table td.trend-ts { color: var(--ink-soft); white-space: nowrap; }
+.trend-table td.trend-name a { color: var(--ink); text-decoration: none; }
+.trend-table td.trend-name a:hover { color: var(--accent); }
+
+/* Group adjacent nav buttons in the filter row */
+.nav-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Section-level descriptive note (e.g. under a section heading) */
 .section-note {
   color: var(--ink-soft);

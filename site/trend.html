@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>leanBench · trend</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='75' text-anchor='middle' font-size='85'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
+</head>
+<body data-page="trend">
+  <header>
+    <div class="container">
+      <h1>Trend</h1>
+      <p class="tagline">how headline workloads have moved across leanSig / leanMultisig commits</p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="filter">
+      <div class="filter-row">
+        <label class="trend-machine-label">
+          target machine
+          <select id="trend-machine"></select>
+        </label>
+        <a href="index.html" class="nav-link">← back to bench</a>
+      </div>
+    </section>
+
+    <section id="trend-chart-section">
+      <h2>Workload means across combos</h2>
+      <p class="section-note">One chart per headline workload — independent linear y-axes so small absolute differences between adjacent combos stay visible (a single shared log axis would compress them away).</p>
+      <div id="trend-charts-grid" class="compare-group-grid"></div>
+    </section>
+
+    <section id="trend-table-section">
+      <h2>Headline numbers</h2>
+      <p class="section-note">Same data, exact values. Click a combo to drop into the index page filtered to that one.</p>
+      <div id="trend-table-wrap"></div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <a href="index.html">index</a> ·
+      <a href="https://github.com/ReamLabs/leanBench">source</a>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+  <script src="trend.js"></script>
+</body>
+</html>
