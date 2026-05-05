@@ -25,9 +25,9 @@ leansig = { git = "https://github.com/leanEthereum/leanSig.git", rev = "16c660e9
 # leanMultisig @ main as of 2026-04-29 — PR #206 (52abd7f2) merged
 # the structured-benchmark API the runner uses to capture per-node
 # proof_kib without parsing stdout.
-xmss            = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "52abd7f2" }
-rec_aggregation = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "52abd7f2" }
-backend         = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "52abd7f2" }
+xmss            = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "f5e2299b" }
+rec_aggregation = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "f5e2299b" }
+backend         = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "f5e2299b" }
 
 [profile.release]
 lto = "thin"

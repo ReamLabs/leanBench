@@ -101,7 +101,7 @@ pub mod xmss_wl {
         let mut samples = Vec::with_capacity(args.samples);
         for i in 0..(args.samples + args.warmup) {
             let mut rng = StdRng::seed_from_u64(args.seed ^ i as u64);
-            let seed: [u8; 20] = rng.random();
+            let seed: [u8; 32] = rng.random();
             let t = std::time::Instant::now();
             let _ = xmss_key_gen(seed, BENCHMARK_SLOT, BENCHMARK_SLOT + 1);
             if i >= args.warmup {
@@ -118,7 +118,7 @@ pub mod xmss_wl {
 
     pub fn sign(args: &CommonArgs) -> Result<Record> {
         let mut rng = StdRng::seed_from_u64(args.seed);
-        let seed: [u8; 20] = rng.random();
+        let seed: [u8; 32] = rng.random();
         let (sk, _pk) = xmss_key_gen(seed, BENCHMARK_SLOT, BENCHMARK_SLOT + 1).expect("keygen");
         let msg: [KoalaBear; MESSAGE_LEN_FE] = message_for_benchmark();
 
@@ -138,7 +138,7 @@ pub mod xmss_wl {
 
     pub fn verify(args: &CommonArgs) -> Result<Record> {
         let mut rng = StdRng::seed_from_u64(args.seed);
-        let seed: [u8; 20] = rng.random();
+        let seed: [u8; 32] = rng.random();
         let (sk, pk) = xmss_key_gen(seed, BENCHMARK_SLOT, BENCHMARK_SLOT + 1).expect("keygen");
         let msg: [KoalaBear; MESSAGE_LEN_FE] = message_for_benchmark();
         let sig = xmss_sign(&mut rng, &sk, &msg, BENCHMARK_SLOT).expect("sign");
@@ -197,7 +197,7 @@ pub mod aggregate {
         let mut reports: Vec<BenchmarkReport> = Vec::with_capacity(args.samples);
         for i in 0..(args.samples + args.warmup) {
             let t = std::time::Instant::now();
-            let report = run_aggregation_benchmark(topology, 0, false, true);
+            let report = run_aggregation_benchmark(topology, false, true);
             if i >= args.warmup {
                 samples.push(t.elapsed().as_nanos());
                 if proof_sizes.is_empty() {
@@ -232,7 +232,7 @@ pub mod aggregate {
     /// signer cache). First call amortises it, so the warmup iterations matter
     /// — we count only post-warmup samples.
     fn flat_n_r2(args: &CommonArgs, n: usize) -> Result<Record> {
-        let topology = AggregationTopology { raw_xmss: n, children: vec![], log_inv_rate: 2 };
+        let topology = AggregationTopology { raw_xmss: n, children: vec![], log_inv_rate: 2, overlap: 0 };
         let (samples, proof_sizes, reports) = run_loop(args, &topology);
         let (root_kib, leaf_kib) = root_and_leaf_kib(&proof_sizes);
         Ok(make_record(
@@ -260,11 +260,12 @@ pub mod aggregate {
     /// Reports total wall time including both leaves + the recursion step.
     /// Subtract `2 × aggregate.flat_<n>_r2` for the recursion-only cost.
     fn tree_2xn_r2(args: &CommonArgs, n: usize) -> Result<Record> {
-        let leaf = AggregationTopology { raw_xmss: n, children: vec![], log_inv_rate: 2 };
+        let leaf = AggregationTopology { raw_xmss: n, children: vec![], log_inv_rate: 2, overlap: 0 };
         let topology = AggregationTopology {
             raw_xmss: 0,
             children: vec![leaf.clone(), leaf],
             log_inv_rate: 2,
+            overlap: 0,
         };
         let (samples, proof_sizes, reports) = run_loop(args, &topology);
         let (root_kib, leaf_kib) = root_and_leaf_kib(&proof_sizes);
@@ -294,11 +295,12 @@ pub mod aggregate {
     /// Reports total wall time including all four leaves + the recursion step.
     /// Subtract `4 × aggregate.flat_<n>_r2` for the recursion-only cost.
     fn tree_4xn_r2(args: &CommonArgs, n: usize) -> Result<Record> {
-        let leaf = AggregationTopology { raw_xmss: n, children: vec![], log_inv_rate: 2 };
+        let leaf = AggregationTopology { raw_xmss: n, children: vec![], log_inv_rate: 2, overlap: 0 };
         let topology = AggregationTopology {
             raw_xmss: 0,
             children: vec![leaf.clone(), leaf.clone(), leaf.clone(), leaf],
             log_inv_rate: 2,
+            overlap: 0,
         };
         let (samples, proof_sizes, reports) = run_loop(args, &topology);
         let (root_kib, leaf_kib) = root_and_leaf_kib(&proof_sizes);
@@ -328,7 +330,7 @@ pub mod aggregate {
     /// Reports total wall time including all eight leaves + the recursion step.
     /// Subtract `8 × aggregate.flat_<n>_r2` for the recursion-only cost.
     fn tree_8xn_r2(args: &CommonArgs, n: usize) -> Result<Record> {
-        let leaf = AggregationTopology { raw_xmss: n, children: vec![], log_inv_rate: 2 };
+        let leaf = AggregationTopology { raw_xmss: n, children: vec![], log_inv_rate: 2, overlap: 0 };
         let topology = AggregationTopology {
             raw_xmss: 0,
             children: vec![
@@ -336,6 +338,7 @@ pub mod aggregate {
                 leaf.clone(), leaf.clone(), leaf.clone(), leaf,
             ],
             log_inv_rate: 2,
+            overlap: 0,
         };
         let (samples, proof_sizes, reports) = run_loop(args, &topology);
         let (root_kib, leaf_kib) = root_and_leaf_kib(&proof_sizes);
