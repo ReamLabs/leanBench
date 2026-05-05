@@ -143,9 +143,9 @@ function fitCostModel(machine) {
 
   return {
     machine,
-    flat: linearFit(flatPoints, "ms", "raw_xmss per leaf"),
-    rec:  linearFit(recPoints, "ms", "fan-in"),
-    proof: linearFit(proofPoints, "KiB", "fan-in"),
+    flat:  linearFit(flatPoints,  "ms",  "M", "raw_xmss per leaf"),
+    rec:   linearFit(recPoints,   "ms",  "N", "fan-in"),
+    proof: linearFit(proofPoints, "KiB", "N", "fan-in"),
   };
 }
 
@@ -157,10 +157,13 @@ function pickLatestRun(machine) {
 function mean(xs) { return xs.reduce((a, b) => a + b, 0) / xs.length; }
 
 // Ordinary least squares y = a + b·x, returns predictor + R² + range.
-function linearFit(points, yUnit, xLabel) {
+// `xVar` is the short variable name shown in the rendered formula
+// (e.g. "M", "N"); `xLabel` is the longer human-readable description
+// kept around for tooltips / future use.
+function linearFit(points, yUnit, xVar, xLabel) {
   const sample = points.length;
   if (sample < 2) {
-    return { predict: () => null, a: null, b: null, r2: null, sample, yUnit, xLabel,
+    return { predict: () => null, a: null, b: null, r2: null, sample, yUnit, xVar, xLabel,
              xMin: null, xMax: null, points };
   }
   const xs = points.map((p) => p.x);
@@ -181,7 +184,7 @@ function linearFit(points, yUnit, xLabel) {
   const xMax = Math.max(...xs);
   return {
     predict: (x) => a + b * x,
-    a, b, r2, sample, yUnit, xLabel, xMin, xMax, points,
+    a, b, r2, sample, yUnit, xVar, xLabel, xMin, xMax, points,
   };
 }
 
@@ -190,7 +193,7 @@ function fmtFit(fit) {
   const a = fit.a;
   const b = fit.b;
   const sign = b >= 0 ? " + " : " − ";
-  return `${a.toFixed(1)}${sign}${Math.abs(b).toFixed(2)} · x  ${fit.yUnit}`;
+  return `${a.toFixed(1)}${sign}${Math.abs(b).toFixed(2)} × ${fit.xVar}  ${fit.yUnit}`;
 }
 
 // ---------- topology enumeration -------------------------------------------
@@ -259,7 +262,7 @@ function renderCostModel(model) {
   const head = el("thead");
   head.appendChild(el("tr", {},
     el("th", { text: "metric" }),
-    el("th", { text: "fit" }),
+    el("th", { text: "calculation" }),
     el("th", { text: "R²" }),
     el("th", { text: "benched range" }),
     el("th", { text: "samples" }),
@@ -268,7 +271,8 @@ function renderCostModel(model) {
   const body = el("tbody");
   for (const r of rows) {
     body.appendChild(el("tr", {},
-      el("td", { class: "topo-cost-name", text: r.label }),
+      el("td", { class: "topo-cost-name",
+        title: `${r.fit.xVar} = ${r.fit.xLabel}`, text: r.label }),
       el("td", { text: fmtFit(r.fit) }),
       el("td", { text: r.fit.r2 == null ? "—" : r.fit.r2.toFixed(3) }),
       el("td", { text: r.fit.xMin == null ? "—" : `${r.fit.xMin}…${r.fit.xMax}` }),
