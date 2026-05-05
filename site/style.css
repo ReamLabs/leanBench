@@ -308,7 +308,7 @@ h2 {
 .topo-results-table td.topo-notes { color: #b45400; font-size: 12px; }
 .topo-rec-break { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
 .topo-results-table tr.topo-extrapolated td.topo-name { font-style: italic; }
-.topology-link {
+.nav-link {
   display: inline-block;
   font-family: var(--mono);
   font-size: 12px;
@@ -318,10 +318,9 @@ h2 {
   border: 1px solid var(--border);
   border-radius: 6px;
   text-decoration: none;
-  margin-left: 16px;
   vertical-align: middle;
 }
-.topology-link:hover { border-color: var(--accent); }
+.nav-link:hover { border-color: var(--accent); }
 
 /* Section-level descriptive note (e.g. under a section heading) */
 .section-note {
