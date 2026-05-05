@@ -32,10 +32,18 @@ SCHEMA_VERSION = 1
 
 # (cli-subcommand, workload-name, include-in-default-set, samples-override)
 #
-# xmss.sign uses rejection sampling against WOTS+ TargetSum + grinding
-# (acceptance ≈ 1 in ~2.3k attempts), so per-sign cost is heavy-tailed
-# (cv ≈ 0.84) and n=30 leaves the mean's 95% CI at ±64 ms; n=300 tightens
-# it to ±26 ms. Other workloads sit at cv ≈ 0.05 and stay at n=30.
+# xmss.sign uses rejection sampling against the WOTS+ TargetSum constraint;
+# the per-sign cost is geometric and stays heavy-tailed (cv ≈ 0.85 across
+# every machine in the matrix) regardless of how high the acceptance rate
+# is — cv = √(1−p)/p ≈ 1 for any small p. n=30 gives a 95% CI on the mean
+# of about ±30% (e.g. ±2.3 ms on a 7.6 ms mean on n1-standard-4); n=300
+# tightens that to ~±10%. Other workloads sit at cv ≈ 0.05 and stay at
+# n=30.
+#
+# (Pre-2026-05-05, leanMultisig WOTS+ also enforced a `V_GRINDING` lock
+# that pushed acceptance to ≈ 1 in 2.3k attempts and the mean to ~220 ms.
+# The grinding lock was removed in the 123 → 124 bit security rework, so
+# the mean dropped ~45× — but the cv is unchanged.)
 ALL_WORKLOADS: list[tuple[str, str, bool, int | None]] = [
     ("leansig-keygen",      "leansig.keygen",           False, None),
     ("leansig-sign",        "leansig.sign",             True,  None),
