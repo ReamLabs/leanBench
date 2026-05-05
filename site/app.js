@@ -1176,4 +1176,5 @@ function renderWorkload(w, idx) {
 // ---------- dispatch --------------------------------------------------------
 
 if (page === "run") renderRun();
+else if (page === "topology") { /* handled by topology.js */ }
 else renderIndex();

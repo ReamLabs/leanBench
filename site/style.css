@@ -212,6 +212,80 @@ h2 {
 .proof-size-table td.proof-size-name { color: var(--ink-soft); }
 .proof-size-table td.proof-size-root { font-weight: 600; color: var(--ink); }
 
+/* Topology explorer page */
+.topo-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.topo-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.topo-form-grid select,
+.topo-form-grid input {
+  font-family: var(--mono);
+  font-size: 14px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.topo-cost-table,
+.topo-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.topo-cost-table th,
+.topo-cost-table td,
+.topo-results-table th,
+.topo-results-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.topo-cost-table th,
+.topo-results-table th {
+  font-weight: 600;
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+.topo-cost-table td.topo-cost-name,
+.topo-results-table td.topo-name {
+  color: var(--ink-soft);
+}
+.topo-results-table td.topo-total { font-weight: 600; color: var(--ink); }
+.topo-results-table td.topo-notes { color: #b45400; font-size: 12px; }
+.topo-results-table tr.topo-extrapolated td.topo-name { font-style: italic; }
+.topology-link {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 12px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-decoration: none;
+  margin-left: 16px;
+  vertical-align: middle;
+}
+.topology-link:hover { border-color: var(--accent); }
+
 /* Section-level descriptive note (e.g. under a section heading) */
 .section-note {
   color: var(--ink-soft);
