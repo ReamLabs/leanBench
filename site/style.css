@@ -213,6 +213,35 @@ h2 {
 .proof-size-table td.proof-size-root { font-weight: 600; color: var(--ink); }
 
 /* Topology explorer page */
+.topo-results-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.topo-results-head h2 { margin: 0; }
+.topo-sort-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.topo-sort-control select {
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 4px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: 0;
+}
 .topo-form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

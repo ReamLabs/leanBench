@@ -38,15 +38,6 @@
             <option value="40">40 (full extrapolation)</option>
           </select>
         </label>
-        <label>
-          sort by
-          <select id="topo-sort">
-            <option value="totalWall" selected>total wall (ascending)</option>
-            <option value="machines">machine count (ascending)</option>
-            <option value="rootProof">root proof size (ascending)</option>
-            <option value="recWall">recursion wall (ascending)</option>
-          </select>
-        </label>
       </div>
     </section>
 
@@ -57,7 +48,18 @@
     </section>
 
     <section id="topology-results">
-      <h2>Candidate topologies</h2>
+      <div class="topo-results-head">
+        <h2>Candidate topologies</h2>
+        <label class="topo-sort-control">
+          sort by
+          <select id="topo-sort">
+            <option value="totalWall" selected>total wall (ascending)</option>
+            <option value="machines">machine count (ascending)</option>
+            <option value="rootProof">root proof size (ascending)</option>
+            <option value="recWall">recursion wall (ascending)</option>
+          </select>
+        </label>
+      </div>
       <p class="section-note" id="topo-results-note">Each row is a balanced tree: <code>fan-in₁ × fan-in₂ × … × leaf_size</code> with fan-in₁ at the root. Machine count assumes machines are reused across tiers (peak = leaf count).</p>
       <div id="topo-table-wrap"></div>
     </section>
