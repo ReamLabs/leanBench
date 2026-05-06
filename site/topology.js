@@ -309,7 +309,10 @@ function evaluateTopology(t, model) {
     leafSize: t.leafSize,
     leafWall, recWall, recPerTier, totalWall, machines, rootProof,
     extrapolatesRec, extrapolatesFlat,
-    label: `${t.tiers.join("×")}×${t.leafSize}`,
+    // Label reads bottom-up (leaf size → root fan-in) to match the table's
+    // column order: leaf wall, rec wall (bottom → top), total wall.
+    // `t.tiers` stays root-first internally; we only reverse for display.
+    label: `${t.leafSize}×${[...t.tiers].reverse().join("×")}`,
   };
 }
 
@@ -373,13 +376,14 @@ function renderResults(rows, model, totalSigs, leafBudgetMs) {
     const notes = [];
     if (r.extrapolatesRec) notes.push("rec extrapolated");
     if (r.extrapolatesFlat) notes.push("leaf extrapolated");
-    // Per-tier breakdown of recursion wall — root tier first to match the
-    // topology label (which reads root → leaves left-to-right).
+    // Per-tier breakdown of recursion wall — bottom-up (deepest mid first,
+    // root last) so it matches both the topology label and the wall-clock
+    // execution order (mid recursion happens before root recursion).
     const recCell = el("td", {},
       el("div", { class: "topo-rec-total", text: fmtMs(r.recWall) }),
       r.recPerTier.length > 1
         ? el("div", { class: "topo-rec-break",
-            text: r.recPerTier.map((ms) => fmtMsCompact(ms)).join(" + ") })
+            text: [...r.recPerTier].reverse().map((ms) => fmtMsCompact(ms)).join(" + ") })
         : null,
     );
     body.appendChild(el("tr", { class: notes.length ? "topo-extrapolated" : "" },
