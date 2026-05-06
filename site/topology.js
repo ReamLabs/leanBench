@@ -34,8 +34,11 @@ const sim = {
 
 async function renderTopologyPage() {
   try {
-    topoIndexData = await fetch("results/index.json").then((r) => r.json());
+    const res = await fetch("results/index.json");
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+    topoIndexData = await res.json();
   } catch (e) {
+    console.error("[topology] failed to load results/index.json:", e);
     document.querySelector("#topology-results").innerHTML =
       "<p>No results yet — run a sweep first.</p>";
     return;
