@@ -588,6 +588,13 @@ select.filter-machine:hover { border-color: var(--accent); }
 .topo-results-table tr.topo-extrapolated td.topo-name { font-style: italic; }
 .topo-results-table td.topo-name-clickable { cursor: pointer; color: var(--accent); }
 .topo-results-table td.topo-name-clickable:hover { text-decoration: underline; }
+.topo-results-table tr.topo-row-hidden { display: none; }
+.topo-expand-link {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.topo-expand-link:hover { text-decoration: none; }
 .nav-link {
   display: inline-block;
   font-family: var(--mono);

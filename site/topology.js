@@ -772,6 +772,8 @@ function evaluateTopology(t, model, slotEnv) {
   return {
     tiers: t.tiers,
     leafSize: t.leafSize,
+    // Total tree depth: each recursion tier + 1 leaf layer.
+    numLayers: t.tiers.length + 1,
     leafWall, recWall, recPerTier, totalWall, machines, rootProof,
     aggIntervalMs, slotDurationMs, inclusionDelayBlocks,
     postAttestMs, proofArrivesAtMs,
@@ -843,6 +845,7 @@ function renderResults(rows, model, totalSigs, leafBudgetMs, slotEnv) {
   // leanMultisig-performance metric.
   head.appendChild(el("tr", { class: "topo-group-row" },
     el("th", {}),
+    el("th", {}),
     el("th", { class: "topo-group", colspan: "4" }, "leanMultisig performance"),
     el("th", { class: "topo-group", colspan: "4" }, "slot structure"),
     el("th", {}),
@@ -851,6 +854,7 @@ function renderResults(rows, model, totalSigs, leafBudgetMs, slotEnv) {
   // The currently-sorted column shows a ▲/▼ indicator.
   const colDefs = [
     { label: "topology",          key: null              },
+    { label: "layers",            key: "numLayers"       },
     { label: "rec wall",          key: "recWall"         },
     { label: "leaf wall",         key: "leafWall"        },
     { label: "total wall",        key: "totalWall"       },
@@ -878,7 +882,7 @@ function renderResults(rows, model, totalSigs, leafBudgetMs, slotEnv) {
   head.appendChild(colRow);
   table.appendChild(head);
   const body = el("tbody");
-  for (const r of rows.slice(0, 50)) {
+  for (const r of rows) {
     const notes = [];
     if (r.extrapolatesRec) notes.push("rec extrapolated");
     if (r.extrapolatesFlat) notes.push("leaf extrapolated");
@@ -911,6 +915,7 @@ function renderResults(rows, model, totalSigs, leafBudgetMs, slotEnv) {
     nameCell.addEventListener("click", () => loadIntoSimulator(r));
     body.appendChild(el("tr", { class: notes.length ? "topo-extrapolated" : "" },
       nameCell,
+      el("td", { text: String(r.numLayers) }),
       recCell,
       el("td", { text: fmtMs(r.leafWall) }),
       el("td", { class: "topo-total", text: fmtMs(r.totalWall) }),
@@ -929,9 +934,46 @@ function renderResults(rows, model, totalSigs, leafBudgetMs, slotEnv) {
   table.appendChild(body);
   wrap.appendChild(table);
 
-  if (rows.length > 50) {
-    wrap.appendChild(el("p", { class: "section-note",
-      text: `Showing top 50 of ${rows.length} candidates.` }));
+  // Pagination: render all rows, hide rows past `currentVisible`. Each click
+  // reveals 10 more. Once everything is visible, the link toggles to "Show
+  // fewer" which resets back to the initial limit.
+  const visibleLimit = 5;
+  const STEP = 10;
+  const totalCandidates = rows.length;
+  let currentVisible = Math.min(visibleLimit, totalCandidates);
+  const allRows = body.querySelectorAll("tr");
+  const updateVisibility = () => {
+    allRows.forEach((tr, idx) => {
+      tr.classList.toggle("topo-row-hidden", idx >= currentVisible);
+    });
+  };
+  updateVisibility();
+
+  if (totalCandidates > visibleLimit) {
+    const footer = el("p", { class: "section-note" });
+    const noteText = document.createTextNode("");
+    const link = el("a", { href: "#", class: "topo-expand-link" }, "");
+    const sync = () => {
+      noteText.textContent = `Showing top ${currentVisible} of ${totalCandidates} candidates. `;
+      if (currentVisible >= totalCandidates) {
+        link.textContent = "Show fewer";
+      } else {
+        const next = Math.min(STEP, totalCandidates - currentVisible);
+        link.textContent = `Show ${next} more`;
+      }
+    };
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (currentVisible >= totalCandidates) currentVisible = visibleLimit;
+      else currentVisible = Math.min(currentVisible + STEP, totalCandidates);
+      updateVisibility();
+      sync();
+    });
+    sync();
+    footer.appendChild(noteText);
+    footer.appendChild(link);
+    footer.appendChild(document.createTextNode("."));
+    wrap.appendChild(footer);
   }
 }
 
