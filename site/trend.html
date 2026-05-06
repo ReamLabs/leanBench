@@ -29,14 +29,8 @@
 
     <section id="trend-chart-section">
       <h2>Workload means across combos</h2>
-      <p class="section-note">One chart per headline workload — independent linear y-axes so small absolute differences between adjacent combos stay visible (a single shared log axis would compress them away).</p>
+      <p class="section-note">One chart per headline workload — solid line is wall-clock (left axis, ms, machine-dependent); dashed line is published proof size (right axis, KiB, machine-independent). xmss.sign has no published proof so it's timing-only.</p>
       <div id="trend-charts-grid" class="compare-group-grid"></div>
-    </section>
-
-    <section id="trend-proof-section">
-      <h2>Root proof sizes across combos</h2>
-      <p class="section-note">Same combos, x-axis; y-axis is the published-proof size in KiB (deterministic per topology, machine-independent). Useful for spotting when a security-parameter or WHIR-config bump moves the on-chain footprint.</p>
-      <div id="trend-proof-grid" class="compare-group-grid"></div>
     </section>
 
     <section id="trend-table-section">

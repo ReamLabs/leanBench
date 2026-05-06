@@ -16,15 +16,9 @@ const TREND_HEADLINES = [
   { name: "aggregate.tree_8x500_r2",   col: "tree_8x500" },
 ];
 
-// Aggregate-only subset for the proof-size charts (xmss.sign doesn't produce
-// a published recursion proof, so it's omitted from the proof view).
-const TREND_PROOF_HEADLINES = TREND_HEADLINES.filter(
-  (h) => h.name.startsWith("aggregate.")
-);
-
 let trendIndexData = null;
 let trendCharts = []; // one per workload — destroyed/rebuilt on machine change
-let trendProofCharts = []; // independent of machine — only rebuilt on initial load
+let trendMachines = []; // closed over by helpers below for the proof-size lookup
 
 async function renderTrendPage() {
   try {
@@ -66,13 +60,12 @@ async function renderTrendPage() {
     select.appendChild(el("option", { value: m.fingerprint }, m.label || m.fingerprint));
   }
   select.value = eligible[0].fingerprint;
+  // Cache the full machine list (not just eligible) so the proof-size lookup
+  // can fall back to any machine that recorded proof_kib_root for a combo —
+  // proof size is deterministic per topology, no need to restrict to eligibles.
+  trendMachines = machines;
   select.addEventListener("change", () => recomputeTrend(eligible, combos));
   recomputeTrend(eligible, combos);
-
-  // Proof sizes are deterministic per topology so the chart doesn't depend
-  // on the chosen machine — render once on load using whatever machine has
-  // the data for each combo.
-  renderProofCharts(machines, combos);
 }
 
 function recomputeTrend(machines, combos) {
@@ -102,10 +95,11 @@ function recomputeTrend(machines, combos) {
 }
 
 function renderTrendChart(machine, chronologicalCombos, best) {
-  // Render one card-with-chart per headline workload, each with its own
-  // linear y-axis so small per-combo differences on small workloads
-  // (xmss.sign, ~220 ms) stay readable instead of being squashed by a
-  // shared scale that has to fit tree_8x500 (~13 s) on the same axis.
+  // Render one card-with-chart per headline workload. Each chart has two
+  // y-axes: left = wall-clock ms on the chosen machine, right = published
+  // proof size in KiB (machine-independent — deterministic per topology).
+  // Independent linear axes so small per-combo differences on small
+  // workloads stay readable.
   const grid = document.querySelector("#trend-charts-grid");
   for (const c of trendCharts) c.destroy();
   trendCharts = [];
@@ -116,9 +110,41 @@ function renderTrendChart(machine, chronologicalCombos, best) {
 
   let added = 0;
   for (const [i, h] of TREND_HEADLINES.entries()) {
-    const data = chronologicalCombos.map((c) => best(c, h.name));
-    if (!data.some((v) => v != null)) continue;
+    const timeData = chronologicalCombos.map((c) => best(c, h.name));
+    if (!timeData.some((v) => v != null)) continue;
     added++;
+
+    const proofData = chronologicalCombos.map((c) => proofKibRoot(c, h.name));
+    const hasProof = proofData.some((v) => v != null);
+
+    const datasets = [{
+      label: "ms",
+      data: timeData,
+      borderColor: colorFor(i),
+      backgroundColor: colorFor(i) + "22",
+      tension: 0.15,
+      fill: false,
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      spanGaps: true,
+      yAxisID: "y",
+    }];
+    if (hasProof) {
+      datasets.push({
+        label: "KiB",
+        data: proofData,
+        borderColor: colorFor(i),
+        backgroundColor: "transparent",
+        borderDash: [5, 4],
+        tension: 0,
+        fill: false,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        pointStyle: "rect",
+        spanGaps: true,
+        yAxisID: "y1",
+      });
+    }
 
     const card = el("div", { class: "compare-card" });
     card.appendChild(el("h3", { text: h.col }));
@@ -129,41 +155,44 @@ function renderTrendChart(machine, chronologicalCombos, best) {
     grid.appendChild(card);
 
     queueMicrotask(() => {
+      const scales = {
+        x: { title: { display: true, text: "combo (oldest → newest)" } },
+        y: {
+          title: { display: true, text: "ms (mean) — solid" },
+          beginAtZero: true,
+          position: "left",
+        },
+      };
+      if (hasProof) {
+        scales.y1 = {
+          title: { display: true, text: "proof KiB — dashed" },
+          beginAtZero: true,
+          position: "right",
+          grid: { drawOnChartArea: false }, // avoid double-set of horizontal gridlines
+        };
+      }
       const chart = new Chart(canvas.getContext("2d"), {
         type: "line",
-        data: {
-          labels,
-          datasets: [{
-            label: h.col,
-            data,
-            borderColor: colorFor(i),
-            backgroundColor: colorFor(i) + "22",
-            tension: 0.15,
-            fill: false,
-            pointRadius: 4,
-            pointHoverRadius: 6,
-            spanGaps: true,
-          }],
-        },
+        data: { labels, datasets },
         options: {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { display: false },
+            legend: hasProof
+              ? { display: true, position: "top", labels: { boxWidth: 16, font: { size: 11 } } }
+              : { display: false },
             tooltip: {
               callbacks: {
                 title: (items) => `combo ${labels[items[0].dataIndex]}`,
                 label: (ctx) => {
+                  if (ctx.dataset.yAxisID === "y1") return `proof: ${ctx.parsed.y} KiB`;
                   const ms = ctx.parsed.y;
                   return ms < 1000 ? `${ms.toFixed(0)} ms` : `${(ms / 1000).toFixed(2)} s`;
                 },
               },
             },
           },
-          scales: {
-            x: { title: { display: true, text: "combo (oldest → newest)" } },
-            y: { title: { display: true, text: "ms (mean)" }, beginAtZero: true },
-          },
+          scales,
         },
       });
       trendCharts.push(chart);
@@ -174,94 +203,19 @@ function renderTrendChart(machine, chronologicalCombos, best) {
   }
 }
 
-// One small line chart per aggregate workload showing the published
-// proof size (KiB) over chronological combos. Proof size is deterministic
-// per topology so we pull it from whichever machine in the index recorded
-// it for that combo.
-function renderProofCharts(machines, combos) {
-  const grid = document.querySelector("#trend-proof-grid");
-  if (!grid) return;
-  for (const c of trendProofCharts) c.destroy();
-  trendProofCharts = [];
-  grid.innerHTML = "";
-
-  const chronological = [...combos].reverse();
-  const labels = chronological.map((c) =>
-    `${shortSha(c.leansig_sha)}·${shortSha(c.leanmultisig_sha)}`);
-
-  // For (combo, workload) → smallest proof_kib_root recorded by any
-  // machine on that combo (smallest is a defensive choice; in practice
-  // they should all match since proof size is deterministic per topology).
-  const proofKib = (combo, workloadName) => {
-    let best = null;
-    for (const m of machines) {
-      for (const r of m.runs || []) {
-        if (r.git_shas?.leansig_sha !== combo.leansig_sha) continue;
-        if (r.git_shas?.leanmultisig_sha !== combo.leanmultisig_sha) continue;
-        const w = (r.workloads || []).find((x) => x.name === workloadName);
-        if (w?.proof_kib_root != null && (best == null || w.proof_kib_root < best)) {
-          best = w.proof_kib_root;
-        }
-      }
+// Proof size is deterministic per topology so we pull each combo's value
+// from whichever machine in the index recorded it. Returns null if no run
+// on that combo recorded proof_kib_root for the workload.
+function proofKibRoot(combo, workloadName) {
+  for (const m of trendMachines) {
+    for (const r of m.runs || []) {
+      if (r.git_shas?.leansig_sha !== combo.leansig_sha) continue;
+      if (r.git_shas?.leanmultisig_sha !== combo.leanmultisig_sha) continue;
+      const w = (r.workloads || []).find((x) => x.name === workloadName);
+      if (w?.proof_kib_root != null) return w.proof_kib_root;
     }
-    return best;
-  };
-
-  let added = 0;
-  for (const [i, h] of TREND_PROOF_HEADLINES.entries()) {
-    const data = chronological.map((c) => proofKib(c, h.name));
-    if (!data.some((v) => v != null)) continue;
-    added++;
-
-    const card = el("div", { class: "compare-card" });
-    card.appendChild(el("h3", { text: h.col }));
-    const wrap = el("div", { class: "compare-card-chart" });
-    const canvas = el("canvas");
-    wrap.appendChild(canvas);
-    card.appendChild(wrap);
-    grid.appendChild(card);
-
-    queueMicrotask(() => {
-      const chart = new Chart(canvas.getContext("2d"), {
-        type: "line",
-        data: {
-          labels,
-          datasets: [{
-            label: h.col,
-            data,
-            borderColor: colorFor(i),
-            backgroundColor: colorFor(i) + "22",
-            tension: 0.15,
-            fill: false,
-            pointRadius: 4,
-            pointHoverRadius: 6,
-            spanGaps: true,
-          }],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              callbacks: {
-                title: (items) => `combo ${labels[items[0].dataIndex]}`,
-                label: (ctx) => `${ctx.parsed.y} KiB`,
-              },
-            },
-          },
-          scales: {
-            x: { title: { display: true, text: "combo (oldest → newest)" } },
-            y: { title: { display: true, text: "root proof (KiB)" }, beginAtZero: true },
-          },
-        },
-      });
-      trendProofCharts.push(chart);
-    });
   }
-  if (!added) {
-    grid.innerHTML = "<p>No combos have recorded proof_kib_root yet.</p>";
-  }
+  return null;
 }
 
 function renderTrendTable(machine, newestFirstCombos, best) {
