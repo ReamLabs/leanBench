@@ -138,7 +138,7 @@ function renderTrendChart(machine, chronologicalCombos, best) {
         // signal alongside the wall-clock line.
         borderColor: colorFor(i) + "66",
         backgroundColor: "transparent",
-        borderWidth: 1.25,
+        borderWidth: 1.75,
         borderDash: [5, 4],
         tension: 0,
         fill: false,
@@ -161,17 +161,24 @@ function renderTrendChart(machine, chronologicalCombos, best) {
     grid.appendChild(card);
 
     queueMicrotask(() => {
+      // Soft axis-title styling — they're context, not signal. Tick labels
+      // stay at default opacity since their numbers are the main read.
+      const titleStyle = {
+        display: true,
+        color: "rgba(128,128,128,0.7)",
+        font: { size: 11, weight: "normal" },
+      };
       const scales = {
-        x: { title: { display: true, text: "combo (oldest → newest)" } },
+        x: { title: { ...titleStyle, text: "combo (oldest → newest)" } },
         y: {
-          title: { display: true, text: "ms (mean) — solid" },
+          title: { ...titleStyle, text: "ms (mean) — solid" },
           beginAtZero: true,
           position: "left",
         },
       };
       if (hasProof) {
         scales.y1 = {
-          title: { display: true, text: "proof KiB — dashed" },
+          title: { ...titleStyle, text: "proof KiB — dashed" },
           beginAtZero: true,
           position: "right",
           grid: { drawOnChartArea: false }, // avoid double-set of horizontal gridlines
