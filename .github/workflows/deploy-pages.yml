@@ -35,6 +35,25 @@ jobs:
           mkdir -p _site/results
           cp results/*.json _site/results/
 
+      # Append a content-hash query string to every JS/CSS reference in HTML
+      # so a fresh deploy invalidates Cloudflare's edge cache for that asset
+      # (cache key includes the full URL, including ?v=…). Source files in
+      # site/ stay un-versioned so local dev keeps working.
+      - name: Fingerprint static assets
+        working-directory: _site
+        run: |
+          shopt -s nullglob
+          for f in *.js *.css vendor/*.js vendor/*.css; do
+            [ -f "$f" ] || continue
+            hash=$(sha256sum "$f" | cut -c1-8)
+            for html in *.html; do
+              # Use # as sed delimiter since paths contain /.
+              sed -i -E "s#(src|href)=\"$f\"#\1=\"$f?v=$hash\"#g" "$html"
+            done
+          done
+          echo "Fingerprinted refs:"
+          grep -E '(src|href)="[^"]+\?v=' *.html | head -20 || true
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
