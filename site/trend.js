@@ -133,14 +133,20 @@ function renderTrendChart(machine, chronologicalCombos, best) {
       datasets.push({
         label: "KiB",
         data: proofData,
-        borderColor: colorFor(i),
+        // Same hue as the timing line but at ~40% alpha and a thinner stroke
+        // — proof size reads as a secondary annotation, not a competing
+        // signal alongside the wall-clock line.
+        borderColor: colorFor(i) + "66",
         backgroundColor: "transparent",
+        borderWidth: 1.25,
         borderDash: [5, 4],
         tension: 0,
         fill: false,
-        pointRadius: 3,
-        pointHoverRadius: 5,
+        pointRadius: 2,
+        pointHoverRadius: 4,
         pointStyle: "rect",
+        pointBackgroundColor: colorFor(i) + "66",
+        pointBorderColor: colorFor(i) + "66",
         spanGaps: true,
         yAxisID: "y1",
       });
@@ -178,9 +184,7 @@ function renderTrendChart(machine, chronologicalCombos, best) {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: hasProof
-              ? { display: true, position: "top", labels: { boxWidth: 16, font: { size: 11 } } }
-              : { display: false },
+            legend: { display: false },
             tooltip: {
               callbacks: {
                 title: (items) => `combo ${labels[items[0].dataIndex]}`,
