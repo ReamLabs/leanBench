@@ -26,56 +26,72 @@
           </summary>
           <div class="combo-menu" id="combo-menu"></div>
         </details>
+        <select id="sim-machine" class="filter-machine" title="Target machine"></select>
         <a href="index.html" class="nav-link">← back to bench</a>
       </div>
     </section>
 
-    <section id="topology-form">
-      <div class="topo-form-grid">
-        <label>
-          target machine
-          <select id="topo-machine"></select>
+    <section id="slot-controls">
+      <div class="slot-controls-header">
+        <h2>Budget settings</h2>
+        <a href="#" id="slot-controls-reset" class="slot-reset-link">reset</a>
+      </div>
+      <div class="sim-controls-grid">
+        <label>propose (ms)
+          <input id="sim-propose" type="number" min="100" step="50" value="800">
         </label>
-        <label>
-          total signatures
-          <input id="topo-total-sigs" type="number" min="100" max="100000" step="100" value="10000">
+        <label>attest (ms)
+          <input id="sim-attest" type="number" min="100" step="50" value="800">
         </label>
-        <label>
-          leaf-wall budget (ms)
-          <input id="topo-leaf-budget" type="number" min="100" step="100" value="800">
+        <label>aggregate (ms)
+          <input id="sim-aggregate" type="number" min="100" step="50" value="800">
         </label>
-        <label>
-          max fan-in
-          <select id="topo-max-fanin">
-            <option value="8" selected>8 (benched only)</option>
-            <option value="16">16 (mild extrapolation)</option>
-            <option value="40">40 (full extrapolation)</option>
-          </select>
+        <label>safe-target (ms)
+          <input id="sim-safe-target" type="number" min="100" step="50" value="800">
+        </label>
+        <label>accept (ms)
+          <input id="sim-accept" type="number" min="100" step="50" value="800">
         </label>
       </div>
+      <div class="sim-controls-grid">
+        <label>propagation budget (ms)
+          <input id="sim-propagation" type="number" min="0" step="50" value="200">
+        </label>
+      </div>
+    </section>
+
+    <section id="topology-results">
+      <h2>Candidate topologies</h2>
+      <p class="section-note" id="topo-results-note">Each row is a balanced tree: <code>fan-in₁ × fan-in₂ × … × leaf_size</code> with fan-in₁ at the root. Click a topology to load it into the simulator. Click any column header to sort.</p>
+      <div class="topo-pre-table">
+        <label class="topo-results-controls">
+          target total signatures
+          <input id="topo-total-sigs" type="number" min="500" max="100000" step="500" value="10000">
+        </label>
+        <a href="#" id="topo-total-sigs-reset" class="slot-reset-link">reset</a>
+      </div>
+      <div id="topo-table-wrap"></div>
+    </section>
+
+    <section id="topology-simulator">
+      <h2>Topology Simulator</h2>
+      <p class="section-note">Build a custom tree by hand: pick fan-ins for each recursion tier and a leaf size. The cost model runs live and reports total wall, slot duration, and block inclusion delay.</p>
+
+      <div class="sim-tiers-wrap">
+        <button id="sim-add-tier" class="sim-add-tier" type="button" title="Add a new root tier on the left">+ tier</button>
+        <div id="sim-tiers" class="sim-tiers"></div>
+        <div id="sim-total" class="sim-total"></div>
+      </div>
+
+      <div id="sim-tree" class="sim-tree"></div>
+
+      <div id="sim-metrics" class="sim-metrics"></div>
     </section>
 
     <section id="topology-cost-model">
       <h2>Cost model</h2>
       <p class="section-note">Per-machine linear fits over the active combo's measurements. R² near 1.0 means the fit captures the trend; lower R² (or extrapolation past benched values) is where uncertainty creeps in.</p>
       <div id="topo-cost-grid"></div>
-    </section>
-
-    <section id="topology-results">
-      <div class="topo-results-head">
-        <h2>Candidate topologies</h2>
-        <label class="topo-sort-control">
-          sort by
-          <select id="topo-sort">
-            <option value="totalWall" selected>total wall (ascending)</option>
-            <option value="machines">machine count (ascending)</option>
-            <option value="rootProof">root proof size (ascending)</option>
-            <option value="recWall">recursion wall (ascending)</option>
-          </select>
-        </label>
-      </div>
-      <p class="section-note" id="topo-results-note">Each row is a balanced tree: <code>fan-in₁ × fan-in₂ × … × leaf_size</code> with fan-in₁ at the root. Machine count assumes machines are reused across tiers (peak = leaf count).</p>
-      <div id="topo-table-wrap"></div>
     </section>
   </main>
 

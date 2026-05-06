@@ -95,10 +95,21 @@ h2 {
 .filter-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 12px;
 }
+.filter-row .nav-link { margin-left: auto; }
+select.filter-machine {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 12px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+select.filter-machine:hover { border-color: var(--accent); }
 .combo-warning {
   margin-bottom: 10px;
   padding: 8px 12px;
@@ -219,43 +230,49 @@ h2 {
 .proof-size-table td.proof-size-name { color: var(--ink-soft); }
 .proof-size-table td.proof-size-root { font-weight: 600; color: var(--ink); }
 
-/* Topology explorer page */
-.topo-results-head {
+/* Topology simulator (above the explorer) */
+#topology-simulator { margin-bottom: 32px; }
+@keyframes sim-flash {
+  0%, 20% { background-color: var(--accent); }
+  100%    { background-color: transparent; }
+}
+.sim-flash {
+  animation: sim-flash 1.6s ease-out;
+  border-radius: 3px;
+}
+#slot-controls {
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  padding: 12px 0;
+}
+#slot-controls h2 { margin: 0; }
+.slot-controls-header {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 12px;
 }
-.topo-results-head h2 { margin: 0; }
-.topo-sort-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.slot-reset-link {
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-size: 12px;
   color: var(--ink-faint);
+  cursor: pointer;
+  text-decoration: none;
 }
-.topo-sort-control select {
-  font-family: var(--mono);
-  font-size: 13px;
-  padding: 4px 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--ink);
-  text-transform: none;
-  letter-spacing: 0;
-}
-.topo-form-grid {
+.slot-reset-link:hover { color: var(--accent); text-decoration: underline; }
+#slot-controls .sim-controls-grid { margin-bottom: 0; }
+.sim-controls-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 14px;
-  margin-bottom: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
 }
-.topo-form-grid label {
+.sim-controls-grid label {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -265,8 +282,8 @@ h2 {
   text-transform: uppercase;
   color: var(--ink-faint);
 }
-.topo-form-grid select,
-.topo-form-grid input {
+.sim-controls-grid select,
+.sim-controls-grid input {
   font-family: var(--mono);
   font-size: 14px;
   padding: 6px 8px;
@@ -276,6 +293,237 @@ h2 {
   color: var(--ink);
   text-transform: none;
   letter-spacing: 0;
+}
+.sim-controls-grid input:disabled {
+  background: var(--accent-soft);
+  color: var(--ink-faint);
+  border-style: dashed;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.sim-controls-grid label:has(input:disabled) {
+  opacity: 0.7;
+}
+.sim-input-note {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-faint);
+  text-transform: none;
+  letter-spacing: 0;
+  font-style: italic;
+}
+.sim-tiers-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.sim-add-tier {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 6px 12px;
+  background: var(--accent-soft);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  align-self: stretch;
+}
+.sim-add-tier:hover { border-color: var(--accent); }
+.sim-total {
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 16px;
+  background: var(--accent-soft);
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  font-family: var(--mono);
+  min-width: 140px;
+}
+.sim-total-label {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.sim-total-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.sim-total-detail {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.sim-total-divider {
+  align-self: stretch;
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.sim-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.sim-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 16px;
+  background: var(--accent-soft);
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  font-family: var(--mono);
+}
+.sim-metric-over {
+  background: rgba(220, 53, 69, 0.1);
+  border-color: #dc3545;
+}
+.sim-metric-over .sim-total-value {
+  color: #dc3545;
+}
+.sim-detail-over {
+  color: #dc3545;
+  font-weight: 600;
+}
+.sim-tiers {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  overflow-x: auto;
+}
+.sim-tier {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 140px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.sim-tier-leaf { background: var(--accent-soft); }
+.sim-tier-head {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.sim-tier-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.sim-step {
+  width: 26px;
+  height: 26px;
+  font-size: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--ink);
+}
+.sim-step:hover { border-color: var(--accent); }
+.sim-tier-fanin { font-weight: 600; }
+.sim-tree {
+  margin: 0 0 16px;
+  padding: 8px 0;
+}
+.sim-tree-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 600px;
+}
+.sim-tree-edge {
+  stroke: var(--border);
+  stroke-width: 0.75;
+}
+.sim-tree-node {
+  fill: var(--accent);
+  stroke: none;
+}
+.sim-tree-node-leaf {
+  fill: var(--accent);
+  fill-opacity: 0.45;
+  stroke: var(--accent);
+  stroke-width: 0.75;
+}
+.sim-tree-node-text {
+  font-family: var(--mono);
+  font-size: 10px;
+  fill: #fff;
+  pointer-events: none;
+}
+.sim-tree-node-text-leaf {
+  fill: var(--ink);
+}
+.sim-tree-col-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  fill: var(--ink-faint);
+  letter-spacing: 0.05em;
+}
+.sim-tier-time { font-weight: 600; color: var(--ink); }
+.sim-tier-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 0;
+}
+.sim-tier-remove:hover { color: var(--accent); }
+
+/* Topology explorer page */
+.topo-pre-table {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 8px 0;
+}
+.topo-results-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.topo-results-controls input {
+  font-family: var(--mono);
+  font-size: 14px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: 0;
+  width: 110px;
 }
 .topo-cost-table,
 .topo-results-table {
@@ -304,10 +552,42 @@ h2 {
 .topo-results-table td.topo-name {
   color: var(--ink-soft);
 }
+.topo-results-table tr.topo-group-row th {
+  border-bottom: none;
+  padding-bottom: 4px;
+  text-align: center;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: none;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+.topo-results-table tr.topo-group-row th.topo-group {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+  background: var(--accent-soft);
+}
+.topo-results-table th.topo-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.topo-results-table th.topo-sortable:hover { color: var(--accent); }
+/* Thin vertical divider between the two column groups (perf | slot).
+   In the group-header row, the boundary sits between the two .topo-group
+   cells. In every other row, it falls before column 6 (agg interval). */
+.topo-results-table th.topo-group + th.topo-group {
+  border-left: 1px solid var(--border);
+}
+.topo-results-table tr:not(.topo-group-row) > th:nth-child(6),
+.topo-results-table tbody td:nth-child(6) {
+  border-left: 1px solid var(--border);
+}
 .topo-results-table td.topo-total { font-weight: 600; color: var(--ink); }
 .topo-results-table td.topo-notes { color: #b45400; font-size: 12px; }
 .topo-rec-break { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
 .topo-results-table tr.topo-extrapolated td.topo-name { font-style: italic; }
+.topo-results-table td.topo-name-clickable { cursor: pointer; color: var(--accent); }
+.topo-results-table td.topo-name-clickable:hover { text-decoration: underline; }
 .nav-link {
   display: inline-block;
   font-family: var(--mono);
