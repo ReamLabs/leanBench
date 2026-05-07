@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> The team has moved leanBench to leanEthereum organization, and continue
+> to develop and maintain it as part of leanEthereum effort at
+> https://github.com/leanEthereum/leanBench.
+
 # leanBench
 
 **Performance benchmarks for leanSig and leanMultisig across hardware.**
